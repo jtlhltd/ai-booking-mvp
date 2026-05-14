@@ -7503,66 +7503,35 @@
             <div class="status-card" id="statusBarLeadsCard" title="Distinct phone numbers stored for this client in the CRM" role="article" aria-label="Unique contacts in CRM">
                 <h4 id="statusCardLeads">Unique contacts in CRM</h4>
                 <div class="status-value" id="statusTotalLeads" aria-live="polite">—</div>
-                <p class="status-hint" id="statusHintLeads">—</p>
+                <p class="status-hint" id="statusHintLeads">Loading...</p>
                 </div>
             <div class="status-card" id="statusBarCallsCard" title="Unique phone numbers dialed: reached vs no pickup (ambiguous rows count as no pickup)" role="article" aria-label="Dial coverage and outcomes">
                 <h4 id="statusCardCalls">Calls We've Made</h4>
                 <div class="status-value" id="statusTotalCalls" aria-live="polite">—</div>
-                <p class="status-hint" id="statusHintCalls">—</p>
+                <p class="status-hint" id="statusHintCalls">Loading...</p>
             </div>
             <div class="status-card" id="statusBarAnsweredCard" title="Unique numbers with at least one conversation-style dial" role="article" aria-label="Reached leads">
                 <h4 id="statusCardAnswered">Reached</h4>
                 <div class="status-value" id="statusCallsAnswered" aria-live="polite">—</div>
-                <p class="status-hint" id="statusHintAnswered">—</p>
+                <p class="status-hint" id="statusHintAnswered">Loading...</p>
             </div>
             <div class="status-card" id="statusBarNoPickupCard" title="Unique numbers with a classified miss but no conversation signal" role="article" aria-label="No pickup leads">
                 <h4 id="statusCardNoPickup">No pickup</h4>
                 <div class="status-value" id="statusCallsNotAnswered" aria-live="polite">—</div>
-                <p class="status-hint" id="statusHintNoPickup">—</p>
+                <p class="status-hint" id="statusHintNoPickup">Loading...</p>
             </div>
             <div class="status-card" id="statusBarConnectOrConversionCard" title="Conversion rate from our follow-up" role="article" aria-label="Our conversion rate">
                 <h4 id="statusCardConversion">Our Conversion Rate</h4>
                 <div class="status-value" id="statusConversionRate" aria-live="polite">—</div>
-                <p class="status-hint" id="statusHintConversion">—</p>
+                <p class="status-hint" id="statusHintConversion">Loading...</p>
             </div>
             <div class="status-card" id="statusBarResponseCard" title="Mean time from lead created to first outbound dial. Narrow cohort — see subtitle." role="article" aria-label="Lead to first outbound call">
                 <h4 id="statusCardResponse">Lead → first call time</h4>
                 <div class="status-value" id="statusFirstResponse" aria-live="polite">—</div>
-                <p class="status-hint" id="statusHintResponse">—</p>
+                <p class="status-hint" id="statusHintResponse">Loading...</p>
             </div>
             </div>
         </section>
-        <script>
-            /* First paint before the large dashboard bundle finishes parse/execute: static HTML uses em dashes,
-               which looks identical to a failed boot. Replace only obvious placeholders on core count tiles. */
-            (function () {
-                try {
-                    var ids = [
-                        'statusTotalLeads',
-                        'statusTotalCalls',
-                        'statusCallsAnswered',
-                        'statusCallsNotAnswered'
-                    ];
-                    for (var i = 0; i < ids.length; i++) {
-                        var el = document.getElementById(ids[i]);
-                        if (!el) continue;
-                        var t = String(el.textContent || '').trim();
-                        if (
-                            t === '' ||
-                            t === '\u2014' ||
-                            t === '\u2013' ||
-                            t === '-' ||
-                            t === '\u2212' ||
-                            t === '\u2010'
-                        ) {
-                            el.textContent = '0';
-                        }
-                    }
-                } catch (e) {
-                    /* ignore */
-                }
-            })();
-        </script>
 
         <div id="outreachCapacityStrip" class="outreach-capacity-strip" hidden aria-live="polite"></div>
         <div id="usageMetersStrip" class="usage-meters-strip" hidden aria-live="polite"></div>
@@ -8162,43 +8131,7 @@
     </div>
     
     <script>
-        // Boot: `__dashboardBootFns` is filled after `stopLiveEvents` / `initDashboard` are declared; the
-        // trailing boot `<script>` calls `globalThis.__initClientDashboard` or reads this bridge before dispatching `client-dashboard-boot`.
         const DEMO_CLIENT_KEY = 'demo_client';
-        var __dashboardBootFns = { stop: null, init: null };
-        globalThis.__dashboardBootFns = __dashboardBootFns;
-        window.addEventListener(
-            'client-dashboard-boot',
-            function __clientDashboardBootHandler() {
-                try {
-                    const st = __dashboardBootFns.stop;
-                    const fn = __dashboardBootFns.init;
-                    if (typeof st === 'function') globalThis.__stopClientDashboardLive = st;
-                    if (typeof fn !== 'function') {
-                        console.error('[DASHBOARD] Boot: dashboard init refs not wired yet');
-                        if (typeof globalThis.__dashboardShowInitFailure === 'function') {
-                            globalThis.__dashboardShowInitFailure(
-                                new Error('Dashboard boot fired before init refs were assigned (race or script error). Hard-refresh (Ctrl+Shift+R).')
-                            );
-                        }
-                        return;
-                    }
-                    globalThis.__initClientDashboard = fn;
-                    void fn().catch((e) => {
-                        console.error('[DASHBOARD] initDashboard failed', e);
-                        if (typeof globalThis.__dashboardShowInitFailure === 'function') {
-                            globalThis.__dashboardShowInitFailure(e);
-                        }
-                    });
-                } catch (e) {
-                    console.error('[DASHBOARD] client-dashboard-boot handler failed', e);
-                    if (typeof globalThis.__dashboardShowInitFailure === 'function') {
-                        globalThis.__dashboardShowInitFailure(e);
-                    }
-                }
-            },
-            { once: true }
-        );
         /** Sync with RECENT_LEADS_DASHBOARD_CAP in server.js (/api/demo-dashboard lead query LIMIT). Brief initial outreach load uses server DASHBOARD_BRIEF_LEADS_CAP with ?brief=1. */
         const RECENT_LEADS_DASHBOARD_CAP = 5000;
         /** Must match server dashboard rolling window / touchpoint bucketing. */
@@ -8225,10 +8158,6 @@
             { icon: '📊', title: 'Outcomes tracked', desc: 'Reach, no pickup, and conversation signals stay visible here.' },
             { icon: '🔄', title: 'Follow-ups scheduled', desc: 'Retries queue after voicemail, busy, or no-answer when configured.' }
         ];
-        /** When `/api/clients` omits `dashboardOutreachMode`, treat as non-outreach unless listed here (prefer server boolean). */
-        const OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK = [];
-        const BASE_URL = window.location.origin;
-        const THEME_KEY = 'dashboard_theme';
         /** True when server sent dashboardOutreachMode for this client. */
         function isOutreachDashboardClient(clientKey) {
             const k = clientKey != null ? String(clientKey).trim() : '';
@@ -10157,6 +10086,9 @@
             applyStoredDashboardCollapsedState();
         }
 
+        const BASE_URL = window.location.origin;
+        const THEME_KEY = 'dashboard_theme';
+        
         // Global client name for personalization
         let clientBusinessName = 'Your Business';
         
@@ -10729,19 +10661,6 @@ ${actionsRow}
             }
         }
 
-        globalThis.__dashboardShowInitFailure = function (err) {
-            try {
-                const msg = String(err && err.message ? err.message : err || 'unknown error').slice(0, 500);
-                const el = document.getElementById('dashboardApiErrorBanner');
-                const det = document.getElementById('dashboardApiErrorDetail');
-                if (el) el.hidden = false;
-                if (det) det.textContent = `Dashboard failed to start: ${msg}`;
-                console.error('[DASHBOARD] init failure surfaced to banner', err);
-            } catch (e) {
-                console.error('[DASHBOARD] could not show init failure banner', e);
-            }
-        };
-
         function isDashboardViewerUrl() {
             try {
                 const p = new URLSearchParams(window.location.search);
@@ -10894,9 +10813,8 @@ ${actionsRow}
         async function fetchLiveData(clientKey, options = {}) {
             const bustCache = options && options.bustCache === true;
             const brief = options && options.brief === true;
-            /** Demo tenant uses embedded DEMO_DATA on failure; keep a tight budget so first paint (and E2E) are not blocked by the ~115s live-tenant budget. */
-            const networkBudgetMs = clientKey === DEMO_CLIENT_KEY ? 15000 : 115000;
-            const jsonReadBudgetMs = clientKey === DEMO_CLIENT_KEY ? 20000 : 45000;
+            const networkBudgetMs = 115000;
+            const jsonReadBudgetMs = 45000;
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), networkBudgetMs);
             try {
@@ -11633,23 +11551,7 @@ ${actionsRow}
             const conversion = formatPercent(data.conversionRate);
             const firstResponse = data.firstResponse || '—';
 
-            const elTotalLeads = document.getElementById('statusTotalLeads');
-            const elTotalCalls = document.getElementById('statusTotalCalls');
-            if (!elTotalLeads || !elTotalCalls) {
-                try {
-                    if (typeof globalThis.__dashboardShowInitFailure === 'function') {
-                        globalThis.__dashboardShowInitFailure(
-                            new Error(
-                                `Dashboard KPI DOM missing (${!elTotalLeads ? '#statusTotalLeads' : ''}${
-                                    !elTotalLeads && !elTotalCalls ? ' ' : ''
-                                }${!elTotalCalls ? '#statusTotalCalls' : ''}).`
-                            )
-                        );
-                    }
-                } catch (_) {}
-                return;
-            }
-            elTotalLeads.textContent = totalLeads;
+            document.getElementById('statusTotalLeads').textContent = totalLeads;
             const callsAnswered = data.metrics?.callsAnswered ?? 0;
             const callsNotAnswered = data.metrics?.callsNotAnswered ?? 0;
             const pendingLeadsOnly = data.metrics?.uniqueLeadsPendingOnly ?? 0;
@@ -11657,7 +11559,7 @@ ${actionsRow}
             const noAttempts = data.metrics?.callsNotAnsweredAttempts;
             const answerRate = data.metrics?.answerRate ?? 0;
             
-            elTotalCalls.textContent = totalCalls;
+            document.getElementById('statusTotalCalls').textContent = totalCalls;
             const uniqDial = Number(data.metrics?.uniqueLeadsCalled ?? data.totalCalls ?? 0) || 0;
             const sumLeads = callsAnswered + callsNotAnswered + pendingLeadsOnly;
             const sumsOk = uniqDial > 0 && sumLeads === uniqDial;
@@ -11830,15 +11732,11 @@ ${actionsRow}
                     : respN != null && respN > 0
                         ? `Mean ${firstResponse} to first dial\n${formatNumber(respN)} leads in sample`
                         : `Mean ${firstResponse} to first dial`;
-            try {
-                renderOutreachCapacityStrip(data);
-                renderUsageMetersStrip(data);
-                renderDashboardExperiencePanel(data);
-                applyDashboardReadOnly(data);
-                bindOutreachScheduleDayClicks();
-            } catch (e2) {
-                console.warn('[DASHBOARD] updateStatusBar secondary panels failed (KPI text already applied)', e2);
-            }
+            renderOutreachCapacityStrip(data);
+            renderUsageMetersStrip(data);
+            renderDashboardExperiencePanel(data);
+            applyDashboardReadOnly(data);
+            bindOutreachScheduleDayClicks();
             } catch (e) {
                 console.error('[DASHBOARD] updateStatusBar failed', e);
             }
@@ -19163,8 +19061,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             updateActivityFeedLiveBadge();
         }
-        __dashboardBootFns.stop = stopLiveEvents;
-        globalThis.__stopClientDashboardLive = stopLiveEvents;
 
         function handleLiveEvent(call) {
             if (!call) return;
@@ -19198,53 +19094,20 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             } catch {
                 /* ignore */
             }
-            const __kpiProbeEl = document.getElementById('statusTotalLeads');
-            const __kpiProbeTxt = __kpiProbeEl ? String(__kpiProbeEl.textContent || '').trim() : '';
-            const __kpiLooksLikeStaticShell =
-                __kpiProbeTxt === '' ||
-                __kpiProbeTxt === '\u2014' ||
-                __kpiProbeTxt === '\u2013' ||
-                __kpiProbeTxt === '-' ||
-                __kpiProbeTxt === '\u2212' ||
-                __kpiProbeTxt === '\u2010';
-            if (globalThis.__dashboardInitStarted === true) {
-                if (__kpiLooksLikeStaticShell) {
-                    console.warn(
-                        '[DASHBOARD] initDashboard dedupe would skip, but KPI strip is still the static shell — allowing re-entry'
-                    );
-                    globalThis.__dashboardInitStarted = false;
-                } else {
-                    console.warn('[DASHBOARD] initDashboard invoked again; ignoring duplicate call');
-                    return;
-                }
-            }
-            globalThis.__dashboardInitStarted = true;
             currentClient = getClientFromURL();
             activityFeedOutcomeFilter = 'all';
+            dashboardData =
+                currentClient === DEMO_CLIENT_KEY ? { ...DEMO_DATA } : createEmptyDashboardData();
+            try {
+                updateStatusBar(dashboardData);
+            } catch (e) {
+                console.warn('[DASHBOARD] bootstrap status bar paint skipped', e);
+            }
             try {
                 activityFeedHideStartFailures = localStorage.getItem('dash.act.hideStartFailures') !== '0';
                 activityFeedGroupRetries = localStorage.getItem('dash.act.groupRetries') !== '0';
             } catch {}
             initActivityFeedChips();
-            /** Demo + real tenants: paint KPI tiles before `/api/clients` (that fetch can hang tens of seconds on cold hosts). */
-            if (currentClient === DEMO_CLIENT_KEY) {
-                dashboardData = { ...DEMO_DATA };
-                try {
-                    updateStatusBar(dashboardData);
-                } catch (e) {
-                    console.warn('[DASHBOARD] demo early KPI paint (before client config) failed', e);
-                }
-                const demoBannerEarly = document.getElementById('demoBanner');
-                if (demoBannerEarly) demoBannerEarly.style.display = 'block';
-                stopLiveEvents();
-            } else if (!isDemoClientKey(currentClient)) {
-                dashboardData = createEmptyDashboardData();
-                try {
-                    updateStatusBar(dashboardData);
-                } catch (e) {
-                    console.warn('[DASHBOARD] early empty KPI paint (before client config) failed', e);
-                }
-            }
             initOfflineDetection();
             initDataFreshness();
             initFollowUpQueueUi();
@@ -19435,12 +19298,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initAccessibility();
             initKeyboardShortcuts();
 
-            // Initialize dashboardData for non-demo (demo already painted from DEMO_DATA before /api/clients).
+            // dashboardData already seeded at start of initDashboard; only toggle demo chrome here.
             if (currentClient === DEMO_CLIENT_KEY) {
-                const demoBannerEl = document.getElementById('demoBanner');
-                if (demoBannerEl) demoBannerEl.style.display = 'block';
+                const db = document.getElementById('demoBanner');
+                if (db) db.style.display = 'block';
+                stopLiveEvents();
             } else {
-                dashboardData = createEmptyDashboardData();
                 const banner = document.getElementById('demoBanner');
                 if (banner) banner.style.display = 'none';
             }
@@ -19460,36 +19323,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             try {
                 const useInitialBrief =
                     currentClient !== DEMO_CLIENT_KEY && isOutreachDashboardClient(currentClient);
-                let livePayload = null;
-                if (currentClient === DEMO_CLIENT_KEY) {
-                    /** Demo first paint uses embedded DEMO_DATA; live metrics can be slow or stubbed in tests — do not block KPI hints on that round-trip. */
-                    void fetchLiveData(currentClient, { brief: false })
-                        .then((p) => {
-                            if (!p || p.ok !== true) return;
-                            try {
-                                dashboardData = mergeData(dashboardData, p, true);
-                                lastDashboardPollFingerprint = dashboardPollFingerprint(dashboardData);
-                                updateStatusBar(dashboardData);
-                                renderRecentActivity(dashboardData);
-                                renderLeadJourney(dashboardData);
-                                renderLeads(dashboardData.recentLeads || [], { preserveFilter: true });
-                                const chartCfg =
-                                    currentDashboardChartConfig ||
-                                    CLIENT_CONFIG[currentClient] ||
-                                    CLIENT_CONFIG[DEMO_CLIENT_KEY] ||
-                                    {};
-                                renderChart(chartCfg, dashboardData);
-                                renderCalls(dashboardData.recentCalls || []);
-                                renderTomAbTestSection(dashboardData);
-                                syncDashboardFreshnessUi();
-                            } catch (e) {
-                                console.warn('[DASHBOARD] demo live metrics apply failed', e);
-                            }
-                        })
-                        .catch((e) => console.warn('[DASHBOARD] demo live metrics fetch failed', e));
-                } else {
-                    livePayload = await fetchLiveData(currentClient, { brief: useInitialBrief });
-                }
+                const livePayload = await fetchLiveData(currentClient, { brief: useInitialBrief });
                 if (livePayload) {
                     // Use real data from API, don't merge with demo data
                     dashboardData = mergeData({}, livePayload, currentClient === DEMO_CLIENT_KEY);
@@ -19692,8 +19526,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
             }, dashboardPollMs);
         }
-        __dashboardBootFns.init = initDashboard;
-        globalThis.__initClientDashboard = initDashboard;
 
         // Accessibility improvements
         function initAccessibility() {
@@ -21373,101 +21205,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
         }
-    </script>
-    <script>
-        (function () {
-            function invokeInit(fn) {
-                if (typeof fn !== 'function') return;
-                globalThis.__initClientDashboard = fn;
-                void fn().catch(function (e) {
-                    console.error('[DASHBOARD] initDashboard failed', e);
-                    if (typeof globalThis.__dashboardShowInitFailure === 'function') {
-                        globalThis.__dashboardShowInitFailure(e);
-                    }
-                });
-            }
-
-            function bootClientDashboard() {
-                if (globalThis.__dashboardBootScheduled) return;
-                globalThis.__dashboardBootScheduled = true;
-                window.addEventListener('beforeunload', () => {
-                    try {
-                        if (typeof globalThis.__stopClientDashboardLive === 'function') {
-                            globalThis.__stopClientDashboardLive();
-                        }
-                    } catch {
-                        /* ignore */
-                    }
-                });
-
-                function runClientDashboardBoot() {
-                    let fn = globalThis.__initClientDashboard;
-                    if (typeof fn !== 'function') {
-                        const bridge = globalThis.__dashboardBootFns;
-                        if (bridge && typeof bridge.init === 'function') fn = bridge.init;
-                    }
-                    if (typeof fn === 'function') {
-                        invokeInit(fn);
-                        return;
-                    }
-                    window.dispatchEvent(new CustomEvent('client-dashboard-boot'));
-                }
-
-                runClientDashboardBoot();
-            }
-
+        function scheduleDashboardBoot() {
+            if (globalThis.__dashboardBootScheduled) return;
+            globalThis.__dashboardBootScheduled = true;
+            const run = () =>
+                void initDashboard().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', bootClientDashboard, { once: true });
+                document.addEventListener('DOMContentLoaded', run, { once: true });
             } else {
-                bootClientDashboard();
+                run();
             }
-
-            window.addEventListener(
-                'load',
-                function () {
-                    setTimeout(function dashboardKpiBootFallbackDelayed() {
-                        const probe = document.getElementById('statusTotalLeads');
-                        if (!probe) return;
-                        const t = String(probe.textContent || '').trim();
-                        const looksUninitialized =
-                            t === '' ||
-                            t === '\u2014' ||
-                            t === '\u2013' ||
-                            t === '-' ||
-                            t === '\u2212' ||
-                            t === '\u2010';
-                        if (!looksUninitialized) return;
-                        if (globalThis.__dashboardKpiLoadFallbackRan === true) return;
-                        globalThis.__dashboardKpiLoadFallbackRan = true;
-
-                        let fn = globalThis.__initClientDashboard;
-                        if (typeof fn !== 'function') {
-                            const bridge = globalThis.__dashboardBootFns;
-                            if (bridge && typeof bridge.init === 'function') fn = bridge.init;
-                        }
-                        if (typeof fn !== 'function') {
-                            if (typeof globalThis.__dashboardShowInitFailure === 'function') {
-                                globalThis.__dashboardShowInitFailure(
-                                    new Error(
-                                        'Dashboard init was never wired (KPI strip still blank after load). Hard-refresh (Ctrl+Shift+R).'
-                                    )
-                                );
-                            }
-                            return;
-                        }
-                        if (globalThis.__dashboardInitStarted === true) {
-                            console.warn(
-                                '[DASHBOARD] Init began but KPI strip never painted; clearing dedupe and retrying init once'
-                            );
-                            globalThis.__dashboardInitStarted = false;
-                        }
-                        console.warn('[DASHBOARD] KPI strip still placeholder after load — running deferred init');
-                        invokeInit(fn);
-                    }, 50);
-                },
-                { once: true }
-            );
-        })();
+        }
+        scheduleDashboardBoot();
+        window.addEventListener('beforeunload', stopLiveEvents);
     </script>
     <!-- Tooltip lives on body so it is not clipped by dashboard cards (overflow: hidden). -->
     <div id="weeklyChartTooltip" class="weekly-chart-tooltip" role="tooltip" hidden aria-hidden="true"></div>
