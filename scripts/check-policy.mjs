@@ -264,6 +264,18 @@ const rules = [
       'scripts/check-policy.mjs',
       'tests/'
     ]
+  },
+  {
+    intentId: 'queue.worker-imports-scheduling-and-resilience',
+    description:
+      'lib/server-queue-workers.js must statically import selectOptimalAssistant from ./server-assistant-scheduling.js and categorizeError from ./server-call-resilience.js when referenced, so cron/dial paths never throw ReferenceError at runtime.',
+    mode: 'require',
+    scope: 'lib/',
+    filePattern: /^lib\/server-queue-workers\.js$/,
+    requireAny: [
+      /(?=.*\bimport\s*\{[^}]*\bcategorizeError\b[^}]*\}\s*from\s*['"]\.\/server-call-resilience\.js['"])(?=.*\bimport\s*\{[^}]*\bselectOptimalAssistant\b[^}]*\}\s*from\s*['"]\.\/server-assistant-scheduling\.js['"])/s
+    ],
+    allow: []
   }
 ];
 

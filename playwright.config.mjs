@@ -9,15 +9,22 @@ function webServerEnv() {
   const encryptionKey =
     process.env.ENCRYPTION_KEY ||
     '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  // Default Postgres (matches GitHub Actions service). Set `PLAYWRIGHT_DB_TYPE=sqlite` for local
+  // runs without Postgres after `npm rebuild better-sqlite3` on a supported Node (see README).
+  const dbType = process.env.PLAYWRIGHT_DB_TYPE || 'postgres';
   return {
     ...process.env,
     PORT: String(port),
     NODE_ENV: process.env.NODE_ENV || 'test',
     TZ: process.env.TZ || 'UTC',
-    DB_TYPE: process.env.DB_TYPE || 'postgres',
-    DATABASE_URL:
-      process.env.DATABASE_URL ||
-      'postgresql://postgres:postgres@127.0.0.1:5432/testdb',
+    DB_TYPE: dbType,
+    ...(dbType === 'postgres'
+      ? {
+          DATABASE_URL:
+            process.env.DATABASE_URL ||
+            'postgresql://postgres:postgres@127.0.0.1:5432/testdb',
+        }
+      : {}),
     API_KEY: process.env.API_KEY || 'playwright-e2e-api-key',
     ENCRYPTION_KEY: encryptionKey,
   };

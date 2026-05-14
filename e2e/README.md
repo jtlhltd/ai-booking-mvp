@@ -16,7 +16,7 @@ $env:PLAYWRIGHT_CHANNEL = "chrome"
 npm run test:e2e
 ```
 
-Playwright starts the server via `webServer` in [playwright.config.mjs](../playwright.config.mjs) (`node run-migration.js && node server.js`) unless one is already listening (non-CI only).
+Playwright starts the server via `webServer` in [playwright.config.mjs](../playwright.config.mjs) (`node run-migration.js && node server.js`) unless one is already listening (non-CI only). The spawned process defaults to **`DB_TYPE=postgres`** and the `DATABASE_URL` from your environment or the same default URL as CI. To use **SQLite** instead (no local Postgres), set `PLAYWRIGHT_DB_TYPE=sqlite` and ensure `better-sqlite3` native bindings are built for your Node version (Node 20 + build tools per repo README).
 
 Debug UI:
 
