@@ -11601,7 +11601,6 @@ ${actionsRow}
             const firstResponse = data.firstResponse || '—';
 
             document.getElementById('statusTotalLeads').textContent = totalLeads;
-            globalThis.__dashboardKpiStripPainted = true;
             const callsAnswered = data.metrics?.callsAnswered ?? 0;
             const callsNotAnswered = data.metrics?.callsNotAnswered ?? 0;
             const pendingLeadsOnly = data.metrics?.uniqueLeadsPendingOnly ?? 0;
@@ -19150,9 +19149,25 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             } catch {
                 /* ignore */
             }
+            const __kpiProbeEl = document.getElementById('statusTotalLeads');
+            const __kpiProbeTxt = __kpiProbeEl ? String(__kpiProbeEl.textContent || '').trim() : '';
+            const __kpiLooksLikeStaticShell =
+                __kpiProbeTxt === '' ||
+                __kpiProbeTxt === '\u2014' ||
+                __kpiProbeTxt === '\u2013' ||
+                __kpiProbeTxt === '-' ||
+                __kpiProbeTxt === '\u2212' ||
+                __kpiProbeTxt === '\u2010';
             if (globalThis.__dashboardInitStarted === true) {
-                console.warn('[DASHBOARD] initDashboard invoked again; ignoring duplicate call');
-                return;
+                if (__kpiLooksLikeStaticShell) {
+                    console.warn(
+                        '[DASHBOARD] initDashboard dedupe would skip, but KPI strip is still the static shell — allowing re-entry'
+                    );
+                    globalThis.__dashboardInitStarted = false;
+                } else {
+                    console.warn('[DASHBOARD] initDashboard invoked again; ignoring duplicate call');
+                    return;
+                }
             }
             globalThis.__dashboardInitStarted = true;
             currentClient = getClientFromURL();
@@ -21373,7 +21388,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             t === '\u2212' ||
                             t === '\u2010';
                         if (!looksUninitialized) return;
-                        if (globalThis.__dashboardKpiStripPainted === true) return;
                         if (globalThis.__dashboardKpiLoadFallbackRan === true) return;
                         globalThis.__dashboardKpiLoadFallbackRan = true;
 
