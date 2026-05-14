@@ -19322,6 +19322,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 dashboardData = createEmptyDashboardData();
                 const banner = document.getElementById('demoBanner');
                 if (banner) banner.style.display = 'none';
+                /** First paint: do not leave static HTML "Loading…" while `/api/clients` and `/api/demo-dashboard/:key` can take tens of seconds on cold Render. */
+                try {
+                    updateStatusBar(dashboardData);
+                } catch (e) {
+                    console.warn('[DASHBOARD] initial empty KPI status paint failed', e);
+                }
             }
 
             // Show loading skeletons
