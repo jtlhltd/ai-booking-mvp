@@ -7503,32 +7503,32 @@
             <div class="status-card" id="statusBarLeadsCard" title="Distinct phone numbers stored for this client in the CRM" role="article" aria-label="Unique contacts in CRM">
                 <h4 id="statusCardLeads">Unique contacts in CRM</h4>
                 <div class="status-value" id="statusTotalLeads" aria-live="polite">—</div>
-                <p class="status-hint" id="statusHintLeads">Loading...</p>
+                <p class="status-hint" id="statusHintLeads">—</p>
                 </div>
             <div class="status-card" id="statusBarCallsCard" title="Unique phone numbers dialed: reached vs no pickup (ambiguous rows count as no pickup)" role="article" aria-label="Dial coverage and outcomes">
                 <h4 id="statusCardCalls">Calls We've Made</h4>
                 <div class="status-value" id="statusTotalCalls" aria-live="polite">—</div>
-                <p class="status-hint" id="statusHintCalls">Loading...</p>
+                <p class="status-hint" id="statusHintCalls">—</p>
             </div>
             <div class="status-card" id="statusBarAnsweredCard" title="Unique numbers with at least one conversation-style dial" role="article" aria-label="Reached leads">
                 <h4 id="statusCardAnswered">Reached</h4>
                 <div class="status-value" id="statusCallsAnswered" aria-live="polite">—</div>
-                <p class="status-hint" id="statusHintAnswered">Loading...</p>
+                <p class="status-hint" id="statusHintAnswered">—</p>
             </div>
             <div class="status-card" id="statusBarNoPickupCard" title="Unique numbers with a classified miss but no conversation signal" role="article" aria-label="No pickup leads">
                 <h4 id="statusCardNoPickup">No pickup</h4>
                 <div class="status-value" id="statusCallsNotAnswered" aria-live="polite">—</div>
-                <p class="status-hint" id="statusHintNoPickup">Loading...</p>
+                <p class="status-hint" id="statusHintNoPickup">—</p>
             </div>
             <div class="status-card" id="statusBarConnectOrConversionCard" title="Conversion rate from our follow-up" role="article" aria-label="Our conversion rate">
                 <h4 id="statusCardConversion">Our Conversion Rate</h4>
                 <div class="status-value" id="statusConversionRate" aria-live="polite">—</div>
-                <p class="status-hint" id="statusHintConversion">Loading...</p>
+                <p class="status-hint" id="statusHintConversion">—</p>
             </div>
             <div class="status-card" id="statusBarResponseCard" title="Mean time from lead created to first outbound dial. Narrow cohort — see subtitle." role="article" aria-label="Lead to first outbound call">
                 <h4 id="statusCardResponse">Lead → first call time</h4>
                 <div class="status-value" id="statusFirstResponse" aria-live="polite">—</div>
-                <p class="status-hint" id="statusHintResponse">Loading...</p>
+                <p class="status-hint" id="statusHintResponse">—</p>
             </div>
             </div>
         </section>
@@ -11748,11 +11748,15 @@ ${actionsRow}
                     : respN != null && respN > 0
                         ? `Mean ${firstResponse} to first dial\n${formatNumber(respN)} leads in sample`
                         : `Mean ${firstResponse} to first dial`;
-            renderOutreachCapacityStrip(data);
-            renderUsageMetersStrip(data);
-            renderDashboardExperiencePanel(data);
-            applyDashboardReadOnly(data);
-            bindOutreachScheduleDayClicks();
+            try {
+                renderOutreachCapacityStrip(data);
+                renderUsageMetersStrip(data);
+                renderDashboardExperiencePanel(data);
+                applyDashboardReadOnly(data);
+                bindOutreachScheduleDayClicks();
+            } catch (e2) {
+                console.warn('[DASHBOARD] updateStatusBar secondary panels failed (KPI text already applied)', e2);
+            }
             } catch (e) {
                 console.error('[DASHBOARD] updateStatusBar failed', e);
             }
