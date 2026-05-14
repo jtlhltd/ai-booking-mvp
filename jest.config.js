@@ -24,7 +24,9 @@ export default {
   collectCoverageFrom: [
     '**/*.js',
     '!**/node_modules/**',
-    '!**/e2e/**'
+    '!**/e2e/**',
+    '!**/playwright-report/**',
+    '!**/test-results/**'
   ],
   coverageThreshold: {
     global: {
