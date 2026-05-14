@@ -14,7 +14,12 @@ test.describe('Client dashboard (demo tenant)', () => {
     const leadsHint = page.locator('#statusHintLeads');
     await expect(leadsHint).not.toHaveText('Loading...', { timeout: 120_000 });
 
-    // Seeded DEMO_DATA uses 48 leads for the demo tenant (formatNumber has no grouping below 1000).
+    // Seeded DEMO_DATA — assert several tiles so we do not pass on "shell loads but KPIs never paint".
+    await expect(page.locator('#statusTotalLeads')).not.toHaveText('—', { timeout: 120_000 });
+    await expect(page.locator('#statusTotalCalls')).not.toHaveText('—', { timeout: 120_000 });
+    await expect(page.locator('#statusConversionRate')).not.toHaveText('—', { timeout: 120_000 });
     await expect(page.locator('#statusTotalLeads')).toHaveText('48', { timeout: 120_000 });
+    await expect(page.locator('#statusTotalCalls')).toHaveText('36', { timeout: 120_000 });
+    await expect(page.locator('#statusConversionRate')).toHaveText('63%', { timeout: 120_000 });
   });
 });

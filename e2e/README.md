@@ -1,5 +1,13 @@
 # Playwright E2E (dashboard)
 
+## What this is for (and what it is not)
+
+Playwright only fails when an **assertion** fails. Narrow tests (“page loaded”, “one element exists”) can go green while the UI still looks empty in the browser — that is a **test design** problem, not a Playwright limitation.
+
+These specs intentionally assert **real KPI text** (demo: known seeded numbers; live tenant: no `Loading...`, no static `—` placeholders on the main strip, leads count is numeric). If your deployment shows all dashes like an uninitialized dashboard, **`npm run test:e2e` against that same base URL should fail** once the server returns the same HTML the user sees.
+
+They do **not** substitute for production monitoring, auth flows, or every chart pixel — add more `expect(...)` calls as you lock in behavior you care about.
+
 ## Local
 
 Prerequisites match a normal app boot: **`DATABASE_URL`**, **`API_KEY`**, and (for Postgres) **`DB_TYPE=postgres`**. Copy from your `.env` or use the same Postgres URL you use for development.
