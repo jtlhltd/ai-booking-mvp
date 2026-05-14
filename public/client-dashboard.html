@@ -11601,6 +11601,7 @@ ${actionsRow}
             const firstResponse = data.firstResponse || '—';
 
             document.getElementById('statusTotalLeads').textContent = totalLeads;
+            globalThis.__dashboardKpiStripPainted = true;
             const callsAnswered = data.metrics?.callsAnswered ?? 0;
             const callsNotAnswered = data.metrics?.callsNotAnswered ?? 0;
             const pendingLeadsOnly = data.metrics?.uniqueLeadsPendingOnly ?? 0;
@@ -21359,29 +21360,47 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
             window.addEventListener(
                 'load',
-                function dashboardKpiBootFallback() {
-                    const probe = document.getElementById('statusTotalLeads');
-                    if (!probe) return;
-                    const t = String(probe.textContent || '').trim();
-                    if (t !== '\u2014' && t !== '-') return;
-                    if (globalThis.__dashboardInitStarted === true) return;
-                    let fn = globalThis.__initClientDashboard;
-                    if (typeof fn !== 'function') {
-                        const bridge = globalThis.__dashboardBootFns;
-                        if (bridge && typeof bridge.init === 'function') fn = bridge.init;
-                    }
-                    if (typeof fn !== 'function') {
-                        if (typeof globalThis.__dashboardShowInitFailure === 'function') {
-                            globalThis.__dashboardShowInitFailure(
-                                new Error(
-                                    'Dashboard init was never wired (stuck on placeholders). Try a hard refresh (Ctrl+Shift+R). If this persists, the main script may have failed to load.'
-                                )
-                            );
+                function () {
+                    setTimeout(function dashboardKpiBootFallbackDelayed() {
+                        const probe = document.getElementById('statusTotalLeads');
+                        if (!probe) return;
+                        const t = String(probe.textContent || '').trim();
+                        const looksUninitialized =
+                            t === '' ||
+                            t === '\u2014' ||
+                            t === '\u2013' ||
+                            t === '-' ||
+                            t === '\u2212' ||
+                            t === '\u2010';
+                        if (!looksUninitialized) return;
+                        if (globalThis.__dashboardKpiStripPainted === true) return;
+                        if (globalThis.__dashboardKpiLoadFallbackRan === true) return;
+                        globalThis.__dashboardKpiLoadFallbackRan = true;
+
+                        let fn = globalThis.__initClientDashboard;
+                        if (typeof fn !== 'function') {
+                            const bridge = globalThis.__dashboardBootFns;
+                            if (bridge && typeof bridge.init === 'function') fn = bridge.init;
                         }
-                        return;
-                    }
-                    console.warn('[DASHBOARD] KPI strip still placeholder after window load — running deferred init');
-                    invokeInit(fn);
+                        if (typeof fn !== 'function') {
+                            if (typeof globalThis.__dashboardShowInitFailure === 'function') {
+                                globalThis.__dashboardShowInitFailure(
+                                    new Error(
+                                        'Dashboard init was never wired (KPI strip still blank after load). Hard-refresh (Ctrl+Shift+R).'
+                                    )
+                                );
+                            }
+                            return;
+                        }
+                        if (globalThis.__dashboardInitStarted === true) {
+                            console.warn(
+                                '[DASHBOARD] Init began but KPI strip never painted; clearing dedupe and retrying init once'
+                            );
+                            globalThis.__dashboardInitStarted = false;
+                        }
+                        console.warn('[DASHBOARD] KPI strip still placeholder after load — running deferred init');
+                        invokeInit(fn);
+                    }, 50);
                 },
                 { once: true }
             );
