@@ -8145,12 +8145,25 @@
                     if (typeof st === 'function') globalThis.__stopClientDashboardLive = st;
                     if (typeof fn !== 'function') {
                         console.error('[DASHBOARD] Boot: dashboard init refs not wired yet');
+                        if (typeof globalThis.__dashboardShowInitFailure === 'function') {
+                            globalThis.__dashboardShowInitFailure(
+                                new Error('Dashboard boot fired before init refs were assigned (race or script error). Hard-refresh (Ctrl+Shift+R).')
+                            );
+                        }
                         return;
                     }
                     globalThis.__initClientDashboard = fn;
-                    void fn().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
+                    void fn().catch((e) => {
+                        console.error('[DASHBOARD] initDashboard failed', e);
+                        if (typeof globalThis.__dashboardShowInitFailure === 'function') {
+                            globalThis.__dashboardShowInitFailure(e);
+                        }
+                    });
                 } catch (e) {
                     console.error('[DASHBOARD] client-dashboard-boot handler failed', e);
+                    if (typeof globalThis.__dashboardShowInitFailure === 'function') {
+                        globalThis.__dashboardShowInitFailure(e);
+                    }
                 }
             },
             { once: true }
@@ -10682,6 +10695,19 @@ ${actionsRow}
                 det.textContent = show && detailText ? String(detailText).slice(0, 500) : '';
             }
         }
+
+        globalThis.__dashboardShowInitFailure = function (err) {
+            try {
+                const msg = String(err && err.message ? err.message : err || 'unknown error').slice(0, 500);
+                const el = document.getElementById('dashboardApiErrorBanner');
+                const det = document.getElementById('dashboardApiErrorDetail');
+                if (el) el.hidden = false;
+                if (det) det.textContent = `Dashboard failed to start: ${msg}`;
+                console.error('[DASHBOARD] init failure surfaced to banner', err);
+            } catch (e) {
+                console.error('[DASHBOARD] could not show init failure banner', e);
+            }
+        };
 
         function isDashboardViewerUrl() {
             try {
@@ -19123,6 +19149,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             } catch {
                 /* ignore */
             }
+            if (globalThis.__dashboardInitStarted === true) {
+                console.warn('[DASHBOARD] initDashboard invoked again; ignoring duplicate call');
+                return;
+            }
+            globalThis.__dashboardInitStarted = true;
             currentClient = getClientFromURL();
             activityFeedOutcomeFilter = 'all';
             try {
@@ -21280,6 +21311,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
     </script>
     <script>
         (function () {
+            function invokeInit(fn) {
+                if (typeof fn !== 'function') return;
+                globalThis.__initClientDashboard = fn;
+                void fn().catch(function (e) {
+                    console.error('[DASHBOARD] initDashboard failed', e);
+                    if (typeof globalThis.__dashboardShowInitFailure === 'function') {
+                        globalThis.__dashboardShowInitFailure(e);
+                    }
+                });
+            }
+
             function bootClientDashboard() {
                 if (globalThis.__dashboardBootScheduled) return;
                 globalThis.__dashboardBootScheduled = true;
@@ -21292,6 +21334,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         /* ignore */
                     }
                 });
+
                 function runClientDashboardBoot() {
                     let fn = globalThis.__initClientDashboard;
                     if (typeof fn !== 'function') {
@@ -21299,19 +21342,49 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         if (bridge && typeof bridge.init === 'function') fn = bridge.init;
                     }
                     if (typeof fn === 'function') {
-                        globalThis.__initClientDashboard = fn;
-                        void fn().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
+                        invokeInit(fn);
                         return;
                     }
                     window.dispatchEvent(new CustomEvent('client-dashboard-boot'));
                 }
+
                 runClientDashboardBoot();
             }
+
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', bootClientDashboard, { once: true });
             } else {
                 bootClientDashboard();
             }
+
+            window.addEventListener(
+                'load',
+                function dashboardKpiBootFallback() {
+                    const probe = document.getElementById('statusTotalLeads');
+                    if (!probe) return;
+                    const t = String(probe.textContent || '').trim();
+                    if (t !== '\u2014' && t !== '-') return;
+                    if (globalThis.__dashboardInitStarted === true) return;
+                    let fn = globalThis.__initClientDashboard;
+                    if (typeof fn !== 'function') {
+                        const bridge = globalThis.__dashboardBootFns;
+                        if (bridge && typeof bridge.init === 'function') fn = bridge.init;
+                    }
+                    if (typeof fn !== 'function') {
+                        if (typeof globalThis.__dashboardShowInitFailure === 'function') {
+                            globalThis.__dashboardShowInitFailure(
+                                new Error(
+                                    'Dashboard init was never wired (stuck on placeholders). Try a hard refresh (Ctrl+Shift+R). If this persists, the main script may have failed to load.'
+                                )
+                            );
+                        }
+                        return;
+                    }
+                    console.warn('[DASHBOARD] KPI strip still placeholder after window load — running deferred init');
+                    invokeInit(fn);
+                },
+                { once: true }
+            );
         })();
     </script>
     <!-- Tooltip lives on body so it is not clipped by dashboard cards (overflow: hidden). -->

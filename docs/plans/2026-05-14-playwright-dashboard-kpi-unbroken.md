@@ -30,3 +30,4 @@
 ## Amendments
 
 - **2026-05-14:** KPI strip stayed on `—` because `runClientDashboardBoot` only read `globalThis.__initClientDashboard`, which was only set inside the `client-dashboard-boot` listener. Fixed by assigning `globalThis.__initClientDashboard` / `globalThis.__stopClientDashboardLive` when wiring `__dashboardBootFns`, mirroring the bridge on `globalThis`, and falling back to `globalThis.__dashboardBootFns.init` in the boot IIFE before dispatching the custom event.
+- **2026-05-14:** Added `window.load` fallback init when `#statusTotalLeads` is still the static placeholder, surfaced init failures via `globalThis.__dashboardShowInitFailure` + `#dashboardApiErrorBanner`, and deduped `initDashboard` after the scroll bootstrap so a missed `DOMContentLoaded` or silent rejection is less likely to leave an all-dash dashboard with no explanation.
