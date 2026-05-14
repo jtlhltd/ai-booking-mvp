@@ -155,6 +155,56 @@ describe('db.js facade (unit)', () => {
     expect(query).toHaveBeenCalledTimes(3);
   });
 
+  test('getFullClient resolves u2d-xpress-tom to tenants row stored as d2d-xpress-tom', async () => {
+    mockDomains();
+
+    const dRow = {
+      client_key: 'd2d-xpress-tom',
+      display_name: 'Tom',
+      timezone: 'UTC',
+      locale: 'en',
+      numbers_json: null,
+      twilio_json: null,
+      vapi_json: null,
+      calendar_json: null,
+      sms_templates_json: null,
+      white_label_config: null,
+      outbound_sequence_json: null,
+      is_enabled: true,
+      created_at: new Date().toISOString(),
+    };
+
+    const query = jest.fn(async (_sql, params) => {
+      if (params[0] === 'u2d-xpress-tom') return { rows: [] };
+      if (params[0] === 'd2d-xpress-tom') return { rows: [dRow] };
+      return { rows: [] };
+    });
+    jest.unstable_mockModule('../../../db/query.js', () => ({
+      createQueryRunner: () => ({
+        query,
+        poolQuerySelect: jest.fn(async () => ({ rows: [] })),
+        safeQuery: jest.fn(async () => ({ rows: [] })),
+      })
+    }));
+    jest.unstable_mockModule('../../../db/connection.js', () => ({
+      createPostgresPoolAndLimiter: jest.fn(),
+      testPostgresPoolConnection: jest.fn(),
+    }));
+    jest.unstable_mockModule('better-sqlite3', () => ({ default: function Database() {} }));
+    jest.unstable_mockModule('../../../db/call-queue-reads.js', () => ({}));
+    jest.unstable_mockModule('../../../db/call-queue-writes.js', () => ({}));
+    jest.unstable_mockModule('../../../db/call-queue-smear.js', () => ({ smearCallQueueScheduledFor: jest.fn() }));
+
+    const db = await import('../../../db.js');
+
+    const client = await db.getFullClient('u2d-xpress-tom');
+    expect(client?.clientKey).toBe('d2d-xpress-tom');
+    expect(query).toHaveBeenCalledTimes(2);
+
+    await db.getFullClient('u2d-xpress-tom');
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
   test('withTransaction uses pool client and commits on success', async () => {
     mockDomains();
 

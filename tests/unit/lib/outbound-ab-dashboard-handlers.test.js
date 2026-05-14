@@ -32,6 +32,12 @@ describe('lib/outbound-ab-dashboard-handlers', () => {
     expect(isDashboardSelfServiceClient('z')).toBe(false);
   });
 
+  test('isDashboardSelfServiceClient accepts Tom URL spelling when default allow-list is d2d only', () => {
+    delete process.env.DASHBOARD_SELF_SERVICE_CLIENT_KEYS;
+    expect(isDashboardSelfServiceClient('u2d-xpress-tom')).toBe(true);
+    expect(isDashboardSelfServiceClient('d2d-xpress-tom')).toBe(true);
+  });
+
   test('isVapiOutboundAbExperimentOnlyPatch validates single vapi patch shape', () => {
     expect(isVapiOutboundAbExperimentOnlyPatch(null)).toBe(false);
     expect(isVapiOutboundAbExperimentOnlyPatch({ vapi: { outboundAbVoiceExperiment: 'exp' } })).toBe(true);

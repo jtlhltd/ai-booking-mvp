@@ -140,8 +140,22 @@ const rules = [
       'server.js',
       'lib/instant-calling.js',
       // Dashboard self-service default allow-list keys (same surface as former server.js inline).
-      'lib/outbound-ab-dashboard-handlers.js'
+      'lib/outbound-ab-dashboard-handlers.js',
+      // URL/API spelling variants for the same anchor tenant row (not customer-facing copy).
+      'lib/client-key-lookup.js'
     ]
+  },
+  {
+    intentId: 'tenant.dashboard-client-key-spelling',
+    description:
+      'lib/client-key-lookup.js must export getClientKeyLookupCandidates and keep both Tom spelling literals paired for mutual DB lookup.',
+    mode: 'require',
+    scope: 'lib/',
+    filePattern: /^lib\/client-key-lookup\.js$/,
+    requireAny: [
+      /(?=.*\bexport function getClientKeyLookupCandidates\b)(?=.*u2d-xpress-tom)(?=.*d2d-xpress-tom)/s
+    ],
+    allow: []
   },
   {
     intentId: 'tenant.no-internal-key-in-vapi-payloads',
@@ -156,7 +170,8 @@ const rules = [
       // The instant-calling worker references the slug only in a comment.
       'lib/instant-calling.js',
       // Env-driven dashboard default keys list (not a Vapi dial payload).
-      'lib/outbound-ab-dashboard-handlers.js'
+      'lib/outbound-ab-dashboard-handlers.js',
+      'lib/client-key-lookup.js'
     ]
   },
   {

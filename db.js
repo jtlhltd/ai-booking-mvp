@@ -10,6 +10,7 @@ import {
 import { getCallAnalyticsEnvOverrideIso } from './lib/call-analytics-cutoff.js';
 import { activeRowsMatchOutboundAbStopSlice } from './lib/outbound-ab-stop-slice.js';
 import { phoneMatchKey, pgQueueLeadPhoneKeyExpr, outboundDialClaimKeyFromRaw } from './lib/lead-phone-key.js';
+import { getClientKeyLookupCandidates } from './lib/client-key-lookup.js';
 import { normalizePhoneE164 } from './lib/utils.js';
 import { resolveTenantTimezone } from './lib/timezone-resolver.js';
 import { createPostgresPoolAndLimiter, testPostgresPoolConnection } from './db/connection.js';
@@ -507,43 +508,67 @@ const CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
  */
 export async function getFullClient(clientKey, options = {}) {
   const bypassCache = options && typeof options === 'object' && options.bypassCache === true;
-  const cacheKey = `client:${clientKey}`;
+  const candidates = getClientKeyLookupCandidates(clientKey);
 
   if (!bypassCache) {
-    const cached = clientCache.get(cacheKey);
-    if (cached && Date.now() < cached.expires) {
-      return cached.data;
+    for (const ck of candidates) {
+      const cacheKey = `client:${ck}`;
+      const cached = clientCache.get(cacheKey);
+      if (cached && Date.now() < cached.expires) {
+        return cached.data;
+      }
     }
   }
 
-  // Fetch from database
-  const { rows } = await query(`
+  let row = null;
+  for (const ck of candidates) {
+    const { rows } = await query(
+      `
     SELECT client_key, display_name, timezone, locale,
            numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, 
            white_label_config, outbound_sequence_json, is_enabled, created_at
     FROM tenants WHERE client_key = $1
-  `, [clientKey]);
-  
-  const client = mapTenantRow(rows[0]);
-  
-  // Cache the result
+  `,
+      [ck]
+    );
+    if (rows[0]) {
+      row = rows[0];
+      break;
+    }
+  }
+
+  const client = mapTenantRow(row);
+
   if (client) {
-    clientCache.set(cacheKey, {
+    const entry = {
       data: client,
       expires: Date.now() + CLIENT_CACHE_TTL
-    });
+    };
+    for (const ck of candidates) {
+      clientCache.set(`client:${ck}`, entry);
+    }
+    const dbKey = client.clientKey;
+    if (dbKey && !candidates.includes(dbKey)) {
+      clientCache.set(`client:${dbKey}`, entry);
+    }
   }
-  
+
   return client;
 }
 
 // Invalidate client cache (call after updates)
 export function invalidateClientCache(clientKey) {
-  clientCache.delete(`client:${clientKey}`);
-  // Also clear any related caches
-  for (const key of clientCache.keys()) {
-    if (key.includes(clientKey)) {
-      clientCache.delete(key);
+  const keysToClear = new Set(getClientKeyLookupCandidates(clientKey));
+  keysToClear.add(String(clientKey || '').trim());
+  for (const ck of keysToClear) {
+    if (ck) clientCache.delete(`client:${ck}`);
+  }
+  // Also clear any related caches (copy keys: delete during iteration is unsafe)
+  for (const key of [...clientCache.keys()]) {
+    for (const ck of keysToClear) {
+      if (ck && key.includes(ck)) {
+        clientCache.delete(key);
+      }
     }
   }
   // Invalidate list cache so new/updated clients appear

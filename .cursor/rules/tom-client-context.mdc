@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## Who Tom is
 
-- **Tom** is the first real client. In this repo his tenant key is **`d2d-xpress-tom`** (branding: D2D Xpress).
+- **Tom** is the first real client. In this repo the canonical stored tenant key is **`d2d-xpress-tom`** (branding: D2D Xpress). The same tenant row is also resolved when the dashboard or API paths use **`u2d-xpress-tom`** (see `lib/client-key-lookup.js` — bookmarks and links may use either spelling).
 - His business is **delivery / courier brokerage** (connecting shippers with capacity), not a generic “local services” shop.
 
 ## What the product should do for him

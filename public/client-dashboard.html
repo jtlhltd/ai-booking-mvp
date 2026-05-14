@@ -19117,6 +19117,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 activityFeedGroupRetries = localStorage.getItem('dash.act.groupRetries') !== '0';
             } catch {}
             initActivityFeedChips();
+            /** Real tenants: paint KPI tiles from empty data before `/api/clients` (can hang tens of seconds on cold Render). */
+            if (currentClient !== DEMO_CLIENT_KEY && !isDemoClientKey(currentClient)) {
+                dashboardData = createEmptyDashboardData();
+                try {
+                    updateStatusBar(dashboardData);
+                } catch (e) {
+                    console.warn('[DASHBOARD] early empty KPI paint (before client config) failed', e);
+                }
+            }
             initOfflineDetection();
             initDataFreshness();
             initFollowUpQueueUi();
