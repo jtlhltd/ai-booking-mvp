@@ -129,6 +129,7 @@ const rules = [
       // Docs / tests / scripts / demos describe the tenant by name; safe.
       'docs/',
       'tests/',
+      'e2e/',
       'scripts/',
       'demos/',
       // Seed / migration SQL references the anchor tenant key (not customer-facing).

@@ -8131,23 +8131,30 @@
     </div>
     
     <script>
-        // Boot runs from a later inline <script>; hook registration at the end of this file was accidentally
-        // nested inside another scope and never executed. Always listen here (top of script) so DOM boot works.
+        // Boot: refs are stored on `__dashboardBootFns` after `stopLiveEvents` / `initDashboard` are declared
+        // (a legacy brace block in this file hides those names from the top-of-script listener closure).
+        const DEMO_CLIENT_KEY = 'demo_client';
+        var __dashboardBootFns = { stop: null, init: null };
+        globalThis.__dashboardBootFns = __dashboardBootFns;
         window.addEventListener(
             'client-dashboard-boot',
             function __clientDashboardBootHandler() {
                 try {
-                    globalThis.__stopClientDashboardLive = stopLiveEvents;
-                    globalThis.__initClientDashboard = initDashboard;
+                    const st = __dashboardBootFns.stop;
+                    const fn = __dashboardBootFns.init;
+                    if (typeof st === 'function') globalThis.__stopClientDashboardLive = st;
+                    if (typeof fn !== 'function') {
+                        console.error('[DASHBOARD] Boot: dashboard init refs not wired yet');
+                        return;
+                    }
+                    globalThis.__initClientDashboard = fn;
+                    void fn().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
                 } catch (e) {
-                    console.error('[DASHBOARD] registerBootHooks failed', e);
+                    console.error('[DASHBOARD] client-dashboard-boot handler failed', e);
                 }
-                void initDashboard().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
             },
             { once: true }
         );
-
-        const DEMO_CLIENT_KEY = 'demo_client';
         /** Sync with RECENT_LEADS_DASHBOARD_CAP in server.js (/api/demo-dashboard lead query LIMIT). Brief initial outreach load uses server DASHBOARD_BRIEF_LEADS_CAP with ?brief=1. */
         const RECENT_LEADS_DASHBOARD_CAP = 5000;
         /** Must match server dashboard rolling window / touchpoint bucketing. */
@@ -19081,6 +19088,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             updateActivityFeedLiveBadge();
         }
+        __dashboardBootFns.stop = stopLiveEvents;
+        globalThis.__stopClientDashboardLive = stopLiveEvents;
 
         function handleLiveEvent(call) {
             if (!call) return;
@@ -19121,8 +19130,18 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 activityFeedGroupRetries = localStorage.getItem('dash.act.groupRetries') !== '0';
             } catch {}
             initActivityFeedChips();
-            /** Real tenants: paint KPI tiles from empty data before `/api/clients` (can hang tens of seconds on cold Render). */
-            if (currentClient !== DEMO_CLIENT_KEY && !isDemoClientKey(currentClient)) {
+            /** Demo + real tenants: paint KPI tiles before `/api/clients` (that fetch can hang tens of seconds on cold hosts). */
+            if (currentClient === DEMO_CLIENT_KEY) {
+                dashboardData = { ...DEMO_DATA };
+                try {
+                    updateStatusBar(dashboardData);
+                } catch (e) {
+                    console.warn('[DASHBOARD] demo early KPI paint (before client config) failed', e);
+                }
+                const demoBannerEarly = document.getElementById('demoBanner');
+                if (demoBannerEarly) demoBannerEarly.style.display = 'block';
+                stopLiveEvents();
+            } else if (!isDemoClientKey(currentClient)) {
                 dashboardData = createEmptyDashboardData();
                 try {
                     updateStatusBar(dashboardData);
@@ -19320,27 +19339,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initAccessibility();
             initKeyboardShortcuts();
 
-            // Initialize with empty data structure for real clients, demo data only for demo client
+            // Initialize dashboardData for non-demo (demo already painted from DEMO_DATA before /api/clients).
             if (currentClient === DEMO_CLIENT_KEY) {
-                dashboardData = { ...DEMO_DATA };
-                try {
-                    updateStatusBar(dashboardData);
-                } catch (e) {
-                    console.warn('[DASHBOARD] demo KPI status paint failed', e);
-                }
                 const demoBannerEl = document.getElementById('demoBanner');
                 if (demoBannerEl) demoBannerEl.style.display = 'block';
-                stopLiveEvents();
             } else {
                 dashboardData = createEmptyDashboardData();
                 const banner = document.getElementById('demoBanner');
                 if (banner) banner.style.display = 'none';
-                /** First paint: do not leave static HTML "Loading…" while `/api/clients` and `/api/demo-dashboard/:key` can take tens of seconds on cold Render. */
-                try {
-                    updateStatusBar(dashboardData);
-                } catch (e) {
-                    console.warn('[DASHBOARD] initial empty KPI status paint failed', e);
-                }
             }
 
             // Show loading skeletons
@@ -19590,6 +19596,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
             }, dashboardPollMs);
         }
+        __dashboardBootFns.init = initDashboard;
+        globalThis.__initClientDashboard = initDashboard;
 
         // Accessibility improvements
         function initAccessibility() {
@@ -21285,8 +21293,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     }
                 });
                 function runClientDashboardBoot() {
-                    const fn = globalThis.__initClientDashboard;
+                    let fn = globalThis.__initClientDashboard;
+                    if (typeof fn !== 'function') {
+                        const bridge = globalThis.__dashboardBootFns;
+                        if (bridge && typeof bridge.init === 'function') fn = bridge.init;
+                    }
                     if (typeof fn === 'function') {
+                        globalThis.__initClientDashboard = fn;
                         void fn().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
                         return;
                     }
