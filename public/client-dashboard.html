@@ -7,336 +7,6 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Client Dashboard</title>
-    <script>
-        (function () {
-            const BOOT_LOCK_MS = 7200;
-            let bootLockUntil = 0;
-            let bootFocusCleanupTimer = null;
-            let bootUserIntent = false;
-            let bootScrollClampAttached = false;
-            let bootVvScrollAttached = false;
-            /** During boot, sequence rows stay non-tabbable so session restore cannot focus a row and scroll it into view. */
-            let bootSeqTabMo = null;
-            /** Ignore keydown for “user intent” briefly so extensions cannot disable the scroll clamp before session-restore scroll. */
-            let bootEarlyKeydownIgnoreUntil = 0;
-
-            function stripOutboundSeqRowTabindexForBoot() {
-                const w = document.getElementById('outboundSequenceWindow');
-                if (!w) return;
-                w.querySelectorAll('.outbound-seq-row[tabindex="0"]').forEach((row) => {
-                    row.setAttribute('tabindex', '-1');
-                    row.setAttribute('data-dashboard-seq-tab-deferred', '1');
-                });
-            }
-
-            function restoreOutboundSeqRowTabindexAfterBoot() {
-                document.querySelectorAll('.outbound-seq-row[data-dashboard-seq-tab-deferred="1"]').forEach((row) => {
-                    row.setAttribute('tabindex', '0');
-                    row.removeAttribute('data-dashboard-seq-tab-deferred');
-                });
-            }
-
-            function pinDashboardToTop() {
-                try {
-                    const se = document.scrollingElement || document.documentElement;
-                    if (se) se.scrollTop = 0;
-                } catch (e) {
-                    /* ignore */
-                }
-                try {
-                    document.body.scrollTop = 0;
-                } catch (e) {
-                    /* ignore */
-                }
-                try {
-                    window.scrollTo(0, 0);
-                } catch (e) {
-                    /* ignore */
-                }
-                try {
-                    const vv = window.visualViewport;
-                    if (vv) {
-                        try {
-                            vv.scrollTop = 0;
-                        } catch (e) {
-                            /* ignore */
-                        }
-                        try {
-                            vv.scrollLeft = 0;
-                        } catch (e) {
-                            /* ignore */
-                        }
-                    }
-                } catch (e) {
-                    /* ignore */
-                }
-            }
-
-            globalThis.__dashboardPinToTop = pinDashboardToTop;
-
-            function detachBootListeners() {
-                document.removeEventListener('focusin', onBootFocusIn, true);
-                if (bootScrollClampAttached) {
-                    window.removeEventListener('scroll', onBootScroll, { passive: true });
-                    bootScrollClampAttached = false;
-                }
-                if (bootVvScrollAttached && window.visualViewport) {
-                    try {
-                        window.visualViewport.removeEventListener('scroll', onBootScroll, { passive: true });
-                    } catch (e) {
-                        /* ignore */
-                    }
-                    bootVvScrollAttached = false;
-                }
-                ['pointerdown', 'wheel', 'touchstart', 'keydown'].forEach((evt) => {
-                    document.removeEventListener(evt, markBootUserIntent, true);
-                });
-                if (bootSeqTabMo) {
-                    try {
-                        bootSeqTabMo.disconnect();
-                    } catch (e) {
-                        /* ignore */
-                    }
-                    bootSeqTabMo = null;
-                }
-                restoreOutboundSeqRowTabindexAfterBoot();
-            }
-
-            function markBootUserIntent(ev) {
-                if (ev && ev.type === 'keydown') {
-                    if (ev.isTrusted === false) return;
-                    if (Date.now() < bootEarlyKeydownIgnoreUntil) return;
-                }
-                bootUserIntent = true;
-                if (bootScrollClampAttached) {
-                    window.removeEventListener('scroll', onBootScroll, { passive: true });
-                    bootScrollClampAttached = false;
-                }
-                if (bootVvScrollAttached && window.visualViewport) {
-                    try {
-                        window.visualViewport.removeEventListener('scroll', onBootScroll, { passive: true });
-                    } catch (e) {
-                        /* ignore */
-                    }
-                    bootVvScrollAttached = false;
-                }
-            }
-
-            function onBootScroll() {
-                if (Date.now() > bootLockUntil || bootUserIntent) {
-                    if (bootScrollClampAttached) {
-                        window.removeEventListener('scroll', onBootScroll, { passive: true });
-                        bootScrollClampAttached = false;
-                    }
-                    if (bootVvScrollAttached && window.visualViewport) {
-                        try {
-                            window.visualViewport.removeEventListener('scroll', onBootScroll, { passive: true });
-                        } catch (e) {
-                            /* ignore */
-                        }
-                        bootVvScrollAttached = false;
-                    }
-                    return;
-                }
-                try {
-                    const y = window.scrollY || window.pageYOffset || 0;
-                    const docY =
-                        (document.scrollingElement && document.scrollingElement.scrollTop) ||
-                        document.documentElement.scrollTop ||
-                        document.body.scrollTop ||
-                        0;
-                    if (y > 1 || docY > 1) {
-                        pinDashboardToTop();
-                    }
-                } catch (e3) {
-                    /* ignore */
-                }
-            }
-
-            /** Session restore may focus sequence list rows (tabindex=0), cohort pills (button), or inputs — all can scroll the window into the outbound block. */
-            function onBootFocusIn(ev) {
-                if (Date.now() > bootLockUntil) {
-                    document.removeEventListener('focusin', onBootFocusIn, true);
-                    return;
-                }
-                const t = ev.target;
-                if (!t || typeof t.closest !== 'function') return;
-                if (!t.closest('#outboundSequenceWindow')) return;
-
-                try {
-                    pinDashboardToTop();
-                } catch (e0) {
-                    /* ignore */
-                }
-
-                const el = /** @type {Element} */ (t);
-                const tag = (el.tagName || '').toLowerCase();
-                let blurFocus = tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button';
-                if (!blurFocus && tag === 'a') {
-                    const href = (typeof el.getAttribute === 'function' ? el.getAttribute('href') : '') || '';
-                    const h = href.trim().toLowerCase();
-                    blurFocus = h !== '' && h !== 'javascript:void(0)' && h !== '#';
-                }
-                if (!blurFocus) {
-                    try {
-                        const ti = typeof el.getAttribute === 'function' ? el.getAttribute('tabindex') : null;
-                        if (ti !== null && ti !== undefined && String(ti).trim() !== '' && String(ti).trim() !== '-1') {
-                            blurFocus = true;
-                        }
-                    } catch (e1) {
-                        /* ignore */
-                    }
-                }
-
-                if (blurFocus) {
-                    try {
-                        if (typeof t.blur === 'function') t.blur();
-                    } catch (e) {
-                        /* ignore */
-                    }
-                    try {
-                        pinDashboardToTop();
-                    } catch (e2) {
-                        /* ignore */
-                    }
-                }
-
-                try {
-                    requestAnimationFrame(function () {
-                        if (Date.now() > bootLockUntil) return;
-                        pinDashboardToTop();
-                        requestAnimationFrame(function () {
-                            if (Date.now() > bootLockUntil) return;
-                            pinDashboardToTop();
-                        });
-                    });
-                } catch (e3) {
-                    /* ignore */
-                }
-            }
-
-            function armBootLock() {
-                bootUserIntent = false;
-                bootEarlyKeydownIgnoreUntil = Math.max(bootEarlyKeydownIgnoreUntil, Date.now() + 750);
-                bootLockUntil = Math.max(bootLockUntil, Date.now() + BOOT_LOCK_MS);
-                document.removeEventListener('focusin', onBootFocusIn, true);
-                document.addEventListener('focusin', onBootFocusIn, true);
-                if (!bootScrollClampAttached) {
-                    bootScrollClampAttached = true;
-                    window.addEventListener('scroll', onBootScroll, { passive: true });
-                }
-                if (!bootVvScrollAttached && window.visualViewport) {
-                    try {
-                        window.visualViewport.addEventListener('scroll', onBootScroll, { passive: true });
-                        bootVvScrollAttached = true;
-                    } catch (e) {
-                        bootVvScrollAttached = false;
-                    }
-                }
-                ['pointerdown', 'wheel', 'touchstart', 'keydown'].forEach((evt) => {
-                    document.removeEventListener(evt, markBootUserIntent, true);
-                    document.addEventListener(evt, markBootUserIntent, { capture: true, passive: true });
-                });
-                if (bootFocusCleanupTimer) clearTimeout(bootFocusCleanupTimer);
-                bootFocusCleanupTimer = setTimeout(function () {
-                    bootFocusCleanupTimer = null;
-                    detachBootListeners();
-                }, BOOT_LOCK_MS + 280);
-
-                stripOutboundSeqRowTabindexForBoot();
-                if (!bootSeqTabMo && typeof MutationObserver !== 'undefined') {
-                    const seqRoot = document.getElementById('outboundSequenceWindow');
-                    if (seqRoot) {
-                        try {
-                            bootSeqTabMo = new MutationObserver(function () {
-                                stripOutboundSeqRowTabindexForBoot();
-                            });
-                            bootSeqTabMo.observe(seqRoot, { childList: true, subtree: true });
-                        } catch (e) {
-                            bootSeqTabMo = null;
-                        }
-                    }
-                }
-            }
-
-            globalThis.__dashboardArmScrollBootLock = armBootLock;
-
-            /** Full reload: session may restore focus to mid-page controls (sequence phone, tabindex rows), which scrolls the window. */
-            globalThis.__dashboardScrollTopNudge = function dashboardScrollTopNudge() {
-                try {
-                    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-                } catch (e) {
-                    /* ignore */
-                }
-                pinDashboardToTop();
-                try {
-                    const ae = document.activeElement;
-                    if (
-                        ae &&
-                        ae !== document.body &&
-                        ae !== document.documentElement &&
-                        typeof ae.closest === 'function' &&
-                        ae.closest('#outboundSequenceWindow')
-                    ) {
-                        if (typeof ae.blur === 'function') ae.blur();
-                        pinDashboardToTop();
-                    }
-                } catch (e2) {
-                    /* ignore */
-                }
-            };
-
-            function scheduleNudges() {
-                bootEarlyKeydownIgnoreUntil = Math.max(bootEarlyKeydownIgnoreUntil, Date.now() + 750);
-                armBootLock();
-
-                const n = globalThis.__dashboardScrollTopNudge;
-                if (typeof n !== 'function') return;
-                n();
-                requestAnimationFrame(function () {
-                    n();
-                    requestAnimationFrame(n);
-                });
-                setTimeout(n, 50);
-                setTimeout(n, 200);
-                setTimeout(n, 600);
-                setTimeout(n, 1200);
-                setTimeout(n, 2200);
-                setTimeout(n, 3200);
-                setTimeout(n, 4500);
-                setTimeout(n, 6200);
-                setTimeout(n, 8000);
-                setTimeout(n, 9500);
-            }
-
-            try {
-                if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-            } catch (e) {
-                /* ignore */
-            }
-            window.addEventListener('pageshow', function dashboardPageShow(ev) {
-                if (ev && ev.persisted) {
-                    try {
-                        if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-                    } catch (e) {
-                        /* ignore */
-                    }
-                    if (typeof globalThis.__dashboardPinToTop === 'function') {
-                        try {
-                            globalThis.__dashboardPinToTop();
-                            setTimeout(function () {
-                                globalThis.__dashboardPinToTop();
-                            }, 0);
-                        } catch (e2) {
-                            /* ignore */
-                        }
-                    }
-                    return;
-                }
-                scheduleNudges();
-            });
-        })();
-    </script>
     <link rel="icon" type="image/svg+xml" href="/icon.svg">
     <link rel="alternate icon" href="/icon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -408,8 +78,6 @@
          */
         html {
             font-size: 71%;
-            /* Avoid viewport jumping when async sections above the fold change height */
-            overflow-anchor: none;
         }
 
         body, html {
@@ -421,7 +89,6 @@
             font-weight: 400;
             font-feature-settings: 'cv02', 'cv03', 'cv04';
             overflow-x: hidden;
-            overflow-anchor: none;
         }
 
         /* Ensure all text elements use Inter */
@@ -4983,11 +4650,6 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
-            overflow-anchor: none;
-        }
-
-        #outboundSequenceWindow {
-            overflow-anchor: none;
         }
 
         .outbound-seq-header {
@@ -8036,7 +7698,7 @@
 
     <div class="data-freshness" id="dataFreshness" role="status" aria-live="polite">
         <span class="data-freshness-dot" id="freshnessDot"></span>
-        <span id="freshnessText">—</span>
+        <span id="freshnessText">Data syncing...</span>
             </div>
 
     <div class="keyboard-hint" id="keyboardHint" role="tooltip" aria-hidden="true">
@@ -9383,7 +9045,7 @@
             `;
         }
 
-        async function renderOutboundSequenceLeadDetail(payload) {
+        function renderOutboundSequenceLeadDetail(payload) {
             const host = document.getElementById('outboundSequenceLeadDetail');
             if (!host) return;
             const row = payload?.row || null;
@@ -9539,11 +9201,7 @@
                     </details>
                 </div>
             `;
-            try {
-                await renderOutboundSequenceInlineHistory({ phone: row.leadPhone || lead.phone, title, detailPayload: payload });
-            } catch {
-                /* non-fatal: call history is supplementary */
-            }
+            renderOutboundSequenceInlineHistory({ phone: row.leadPhone || lead.phone, title, detailPayload: payload }).catch(() => {});
         }
 
         async function refreshOutboundSequenceWindow(clientKey, { phoneLookup = null } = {}) {
@@ -9555,16 +9213,6 @@
                 return;
             }
             wrap.hidden = false;
-            try {
-                if (typeof globalThis.__dashboardPinToTop === 'function') {
-                    globalThis.__dashboardPinToTop();
-                    requestAnimationFrame(function () {
-                        if (typeof globalThis.__dashboardPinToTop === 'function') globalThis.__dashboardPinToTop();
-                    });
-                }
-            } catch (ePin0) {
-                /* ignore */
-            }
             try {
                 const [summaryRes, leadsRes] = await Promise.all([
                     fetch(`${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/summary`, { cache: 'no-store' }).then((r) => r.json()),
@@ -9602,7 +9250,7 @@
                     );
                     if (detailRes?.ok === true && detailRes?.row) {
                         outboundSequenceSelectedPhone = String(detailRes?.row?.leadPhone || detailPhone).trim() || detailPhone;
-                        await renderOutboundSequenceLeadDetail(detailRes);
+                        renderOutboundSequenceLeadDetail(detailRes);
                     } else {
                         const errLabel =
                             detailRes?.error === 'outbound_sequence_phone_failed' && String(detailRes?.message || '').trim()
@@ -9620,33 +9268,8 @@
             } catch (e) {
                 console.warn('[DASHBOARD] outbound sequence window refresh failed', e);
                 renderOutboundSequenceLeadEmptyState('The sequence panel could not refresh just now. Try Refresh again in a moment.');
-            } finally {
-                try {
-                    if (typeof globalThis.__dashboardPinToTop === 'function') {
-                        globalThis.__dashboardPinToTop();
-                        const ae = document.activeElement;
-                        if (
-                            ae &&
-                            ae !== document.body &&
-                            ae !== document.documentElement &&
-                            typeof ae.closest === 'function' &&
-                            ae.closest('#outboundSequenceWindow')
-                        ) {
-                            if (typeof ae.blur === 'function') ae.blur();
-                            globalThis.__dashboardPinToTop();
-                        }
-                    }
-                    requestAnimationFrame(function () {
-                        try {
-                            if (typeof globalThis.__dashboardPinToTop === 'function') globalThis.__dashboardPinToTop();
-                        } catch (e2) {
-                            /* ignore */
-                        }
-                    });
-                } catch (e3) {
-                    /* ignore */
-                }
             }
+        }
 
         function initOutboundSequenceWindowUi() {
             const wrap = document.getElementById('outboundSequenceWindow');
@@ -10771,11 +10394,6 @@ ${actionsRow}
             const freshnessText = document.getElementById('freshnessText');
             if (!freshnessText) return;
             const dot = document.getElementById('freshnessDot');
-            if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-                freshnessText.textContent = 'Offline';
-                if (dot) dot.classList.add('offline');
-                return;
-            }
             if (dashboardLivePayloadFailed) {
                 freshnessText.textContent = 'Live metrics unavailable';
                 if (dot) dot.classList.add('offline');
@@ -10786,10 +10404,6 @@ ${actionsRow}
             const diffMs = now - lastDataUpdate;
             const diffMins = Math.floor(diffMs / 60000);
             const diffSecs = Math.floor((diffMs % 60000) / 1000);
-            if (!Number.isFinite(diffMs) || diffMs < 0) {
-                freshnessText.textContent = 'Updated just now';
-                return;
-            }
             if (diffMins < 1) {
                 freshnessText.textContent = `Updated ${diffSecs}s ago`;
             } else if (diffMins < 60) {
@@ -10813,90 +10427,57 @@ ${actionsRow}
         async function fetchLiveData(clientKey, options = {}) {
             const bustCache = options && options.bustCache === true;
             const brief = options && options.brief === true;
-            const networkBudgetMs = 115000;
-            const jsonReadBudgetMs = 45000;
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), networkBudgetMs);
-            try {
-                const params = new URLSearchParams();
-                if (bustCache) params.set('t', String(Date.now()));
-                if (brief) params.set('brief', '1');
-                const q = params.toString() ? `?${params.toString()}` : '';
-                const res = await fetch(
-                    `${BASE_URL}/api/demo-dashboard/${encodeURIComponent(clientKey)}${q}`,
-                    { signal: controller.signal }
-                );
-
-                if (res.ok) {
-                    let payload;
-                    try {
-                        payload = await Promise.race([
-                            res.json(),
-                            new Promise((_, rej) =>
-                                setTimeout(
-                                    () =>
-                                        rej(
-                                            Object.assign(new Error('Live metrics response body stalled'), {
-                                                name: 'JsonReadTimeout',
-                                            })
-                                        ),
-                                    jsonReadBudgetMs
-                                )
-                            ),
-                        ]);
-                    } catch (je) {
-                        if (je && je.name === 'JsonReadTimeout') {
-                            lastDashboardFetchError = `Reading live metrics stalled (${jsonReadBudgetMs / 1000}s). Try refresh.`;
-                        } else {
-                            lastDashboardFetchError = `Could not parse live metrics: ${String(je?.message || je).slice(0, 240)}`;
+            if (clientKey !== DEMO_CLIENT_KEY) {
+                try {
+                    // Add timeout to prevent hanging
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 115000); // server smartRequestTimeout demoDashboard tier is 98s (JSON 504 before Render ~100s HTML 502); client waits slightly longer for slow reads
+                    const params = new URLSearchParams();
+                    if (bustCache) params.set('t', String(Date.now()));
+                    if (brief) params.set('brief', '1');
+                    const q = params.toString() ? `?${params.toString()}` : '';
+                    const res = await fetch(
+                        `${BASE_URL}/api/demo-dashboard/${encodeURIComponent(clientKey)}${q}`,
+                        { signal: controller.signal }
+                    );
+                    clearTimeout(timeoutId);
+                    
+                    if (res.ok) {
+                        const payload = await res.json();
+                        if (payload && payload.ok) {
+                            lastDashboardFetchError = '';
+                            lastDataUpdate = new Date();
+                            return payload;
                         }
+                        lastDashboardFetchError =
+                            payload && payload.error
+                                ? `API error: ${String(payload.error).slice(0, 240)}`
+                                : 'API returned an unexpected payload (missing ok).';
                         return null;
                     }
-                    if (payload && payload.ok) {
-                        lastDashboardFetchError = '';
-                        lastDataUpdate = new Date();
-                        return payload;
+                    let errBody = '';
+                    try {
+                        errBody = await res.text();
+                    } catch {
+                        errBody = '';
                     }
-                    lastDashboardFetchError =
-                        payload && payload.error
-                            ? `API error: ${String(payload.error).slice(0, 240)}`
-                            : 'API returned an unexpected payload (missing ok).';
+                    lastDashboardFetchError = `HTTP ${res.status}${errBody ? ` — ${errBody.slice(0, 240)}` : ''}`;
+                    return null;
+                } catch (err) {
+                    if (err.name === 'AbortError') {
+                        console.warn('Data fetch timeout - server may be slow');
+                        lastDashboardFetchError = 'Request timed out while loading live metrics (115s budget).';
+                    } else {
+                        console.warn('Live data unavailable', err.message);
+                        lastDashboardFetchError = `Network: ${String(err.message || err).slice(0, 240)}`;
+                    }
+                    // Don't throw - return null to allow dashboard to continue with existing data
                     return null;
                 }
-                let errBody = '';
-                try {
-                    errBody = await Promise.race([
-                        res.text(),
-                        new Promise((_, rej) =>
-                            setTimeout(
-                                () =>
-                                    rej(
-                                        Object.assign(new Error('error body stalled'), {
-                                            name: 'BodyReadTimeout',
-                                        })
-                                    ),
-                                12000
-                            )
-                        ),
-                    ]);
-                } catch (te) {
-                    errBody =
-                        te && te.name === 'BodyReadTimeout' ? '(error body read timed out)' : '(error body unreadable)';
-                }
-                lastDashboardFetchError = `HTTP ${res.status}${errBody ? ` — ${errBody.slice(0, 240)}` : ''}`;
-                return null;
-            } catch (err) {
-                if (err.name === 'AbortError') {
-                    console.warn('Data fetch timeout - server may be slow');
-                    lastDashboardFetchError = `Request timed out while loading live metrics (${networkBudgetMs / 1000}s budget).`;
-                } else {
-                    console.warn('Live data unavailable', err.message);
-                    lastDashboardFetchError = `Network: ${String(err.message || err).slice(0, 240)}`;
-                }
-                return null;
-            } finally {
-                clearTimeout(timeoutId);
+            } else {
+                lastDataUpdate = new Date();
             }
+            return null;
         }
 
         /** Re-pull /api/demo-dashboard after CRM mutations so KPI tiles match Postgres without waiting for the 60s poll. */
@@ -11465,6 +11046,26 @@ ${actionsRow}
             }
         }
         
+        function updateFreshnessIndicator() {
+            const freshnessEl = document.getElementById('freshnessText');
+            if (!freshnessEl) return;
+            
+            if (lastDataUpdate) {
+                const secondsAgo = Math.floor((Date.now() - lastDataUpdate.getTime()) / 1000);
+                if (secondsAgo < 60) {
+                    freshnessEl.textContent = `Updated ${secondsAgo}s ago`;
+                } else if (secondsAgo < 3600) {
+                    const minutes = Math.floor(secondsAgo / 60);
+                    freshnessEl.textContent = `Updated ${minutes}m ago`;
+                } else {
+                    const hours = Math.floor(secondsAgo / 3600);
+                    freshnessEl.textContent = `Updated ${hours}h ago`;
+                }
+            } else {
+                freshnessEl.textContent = 'Data syncing...';
+            }
+        }
+        
         function formatNumber(value) {
             if (value === undefined || value === null) return '—';
             return Number(value).toLocaleString('en-GB');
@@ -11540,7 +11141,6 @@ ${actionsRow}
             'Cohort: lead row created in the last 30 days, and its first matching outbound dial within 48h of that time. Phones matched exactly or by last 10 digits.';
 
         function updateStatusBar(data) {
-            try {
             const tomOutreach = isOutreachDashboardClient(currentClient);
             const totalLeads = formatNumber(data.totalLeads);
             const totalCalls = formatNumber(data.totalCalls);
@@ -11737,9 +11337,6 @@ ${actionsRow}
             renderDashboardExperiencePanel(data);
             applyDashboardReadOnly(data);
             bindOutreachScheduleDayClicks();
-            } catch (e) {
-                console.error('[DASHBOARD] updateStatusBar failed', e);
-            }
         }
 
         function formatActivitySnapshot(iso, timeZone = DASHBOARD_ACTIVITY_TZ) {
@@ -16572,15 +16169,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 ? `<div class="meta-label">${escapeHtml(businessName)}</div><div class="tom-ab-test-meta">Enter a phone and click Lookup.</div>`
                 : '<div class="tom-ab-test-meta">Enter a phone and click Lookup.</div>';
             modal.classList.add('open');
-            try {
-                input.focus({ preventScroll: true });
-            } catch {
-                try {
-                    input.focus();
-                } catch {
-                    /* ignore */
-                }
-            }
+            input.focus();
         }
 
         function followUpCloseCallHistoryModal() {
@@ -17156,17 +16745,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             });
             input.addEventListener('blur', () => finish(true));
             setTimeout(() => {
-                try {
-                    input.focus({ preventScroll: true });
-                    input.select();
-                } catch {
-                    try {
-                        input.focus();
-                        input.select();
-                    } catch {
-                        /* ignore */
-                    }
-                }
+                try { input.focus(); input.select(); } catch {}
             }, 0);
         }
 
@@ -19080,36 +18659,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         async function initDashboard() {
-            try {
-                if (typeof globalThis.__dashboardScrollTopNudge === 'function') {
-                    globalThis.__dashboardScrollTopNudge();
-                } else {
-                    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-                    if (typeof globalThis.__dashboardPinToTop === 'function') {
-                        globalThis.__dashboardPinToTop();
-                    } else {
-                        window.scrollTo(0, 0);
-                    }
-                }
-            } catch {
-                /* ignore */
-            }
             currentClient = getClientFromURL();
             activityFeedOutcomeFilter = 'all';
-            dashboardData =
-                currentClient === DEMO_CLIENT_KEY ? { ...DEMO_DATA } : createEmptyDashboardData();
-            try {
-                updateStatusBar(dashboardData);
-            } catch (e) {
-                console.warn('[DASHBOARD] bootstrap status bar paint skipped', e);
-            }
             try {
                 activityFeedHideStartFailures = localStorage.getItem('dash.act.hideStartFailures') !== '0';
                 activityFeedGroupRetries = localStorage.getItem('dash.act.groupRetries') !== '0';
             } catch {}
             initActivityFeedChips();
-            initOfflineDetection();
-            initDataFreshness();
             initFollowUpQueueUi();
             applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
@@ -19125,41 +18681,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (currentClient !== DEMO_CLIENT_KEY) {
                 try {
                     console.log('[DASHBOARD] Fetching client config from:', `${BASE_URL}/api/clients/${currentClient}`);
-                    const controller = new AbortController();
-                    const clientCfgTimeoutMs = 35000;
-                    const tid = setTimeout(() => controller.abort(), clientCfgTimeoutMs);
-                    let response;
-                    try {
-                        response = await fetch(`${BASE_URL}/api/clients/${currentClient}`, { signal: controller.signal });
-                    } finally {
-                        clearTimeout(tid);
-                    }
+                    const response = await fetch(`${BASE_URL}/api/clients/${currentClient}`);
                     console.log('[DASHBOARD] Response status:', response.status, response.ok);
                     
                     if (response.ok) {
-                        let data;
-                        try {
-                            data = await Promise.race([
-                                response.json(),
-                                new Promise((_, rej) =>
-                                    setTimeout(
-                                        () =>
-                                            rej(
-                                                Object.assign(new Error('client config JSON stalled'), {
-                                                    name: 'JsonReadTimeout',
-                                                })
-                                            ),
-                                        25000
-                                    )
-                                ),
-                            ]);
-                        } catch (je) {
-                            console.warn('[DASHBOARD] client config JSON read failed', je);
-                            data = null;
-                        }
+                const data = await response.json();
                         console.log('[DASHBOARD] API response data:', data);
                         
-                        if (data && data.ok && data.client) {
+                        if (data.ok && data.client) {
                             clientConfig = data.client;
                             window.__dashboardOutreachMode =
                                 typeof clientConfig.dashboardOutreachMode === 'boolean'
@@ -19181,39 +18710,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             });
                         } else {
                             console.warn('[DASHBOARD] API response missing client data:', {
-                                hasOk: !!(data && data.ok),
-                                hasClient: !!(data && data.client),
+                                hasOk: !!data.ok,
+                                hasClient: !!data.client,
                                 data: data
                             });
                         }
                     } else {
-                        let errorText = '';
-                        try {
-                            errorText = await Promise.race([
-                                response.text(),
-                                new Promise((_, rej) =>
-                                    setTimeout(
-                                        () =>
-                                            rej(
-                                                Object.assign(new Error('client error body stalled'), {
-                                                    name: 'BodyReadTimeout',
-                                                })
-                                            ),
-                                        12000
-                                    )
-                                ),
-                            ]);
-                        } catch (te) {
-                            errorText =
-                                te && te.name === 'BodyReadTimeout' ? '(error body timed out)' : '(error body unreadable)';
-                        }
+                        const errorText = await response.text();
                         console.error('[DASHBOARD] API error response:', response.status, errorText);
                     }
                 } catch (err) {
                     console.error('[DASHBOARD] Could not fetch client config:', err);
-                    if (err && err.name === 'AbortError') {
-                        console.warn(`[DASHBOARD] Client config fetch aborted after ${35000}ms`);
-                    }
                 }
             }
             
@@ -19297,13 +18804,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initDashboardExperienceUi();
             initAccessibility();
             initKeyboardShortcuts();
+            initOfflineDetection();
+            initDataFreshness();
 
-            // dashboardData already seeded at start of initDashboard; only toggle demo chrome here.
+            // Initialize with empty data structure for real clients, demo data only for demo client
             if (currentClient === DEMO_CLIENT_KEY) {
-                const db = document.getElementById('demoBanner');
-                if (db) db.style.display = 'block';
+                dashboardData = { ...DEMO_DATA };
+                document.getElementById('demoBanner').style.display = 'block';
                 stopLiveEvents();
             } else {
+                dashboardData = createEmptyDashboardData();
                 const banner = document.getElementById('demoBanner');
                 if (banner) banner.style.display = 'none';
             }
@@ -19348,12 +18858,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     if (leadsContainer) {
                         showError(leadsContainer, 'Unable to load dashboard data. Please refresh the page.', () => location.reload());
                     }
-                }
-            } finally {
-                try {
-                    syncDashboardFreshnessUi();
-                } catch (e) {
-                    /* ignore */
                 }
             }
 
@@ -19436,20 +18940,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 renderVoicemailListener().catch(err => console.warn('Voicemail listener failed', err))
             ]).then(() => {
                 console.log('All async data loaded');
-                try {
-                    if (typeof globalThis.__dashboardArmScrollBootLock === 'function') {
-                        globalThis.__dashboardArmScrollBootLock();
-                    }
-                    if (typeof globalThis.__dashboardScrollTopNudge === 'function') {
-                        globalThis.__dashboardScrollTopNudge();
-                        setTimeout(() => globalThis.__dashboardScrollTopNudge(), 80);
-                        setTimeout(() => globalThis.__dashboardScrollTopNudge(), 400);
-                        setTimeout(() => globalThis.__dashboardScrollTopNudge(), 900);
-                        setTimeout(() => globalThis.__dashboardScrollTopNudge(), 2000);
-                    }
-                } catch (e) {
-                    console.warn('[DASHBOARD] scroll nudge failed', e);
-                }
             });
             
             // Load integration health (non-blocking)
@@ -19635,12 +19125,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             function updateOnlineStatus() {
                 if (navigator.onLine) {
                     freshnessDot?.classList.remove('offline');
-                    /* Footer copy is owned by syncDashboardFreshnessUi ("Updated … ago"); do not force "Online" here or it masks load state. */
-                    try {
-                        syncDashboardFreshnessUi();
-                    } catch (e) {
-                        /* ignore */
-                    }
+                    if (freshnessText) freshnessText.textContent = 'Online';
                 } else {
                     freshnessDot?.classList.add('offline');
                     if (freshnessText) freshnessText.textContent = 'Offline';
@@ -19648,47 +19133,35 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
             }
 
-            if (!globalThis.__dashOfflineListenersBound) {
-                globalThis.__dashOfflineListenersBound = true;
-                window.addEventListener('online', () => {
-                    updateOnlineStatus();
-                    showToast('Connection Restored', 'You are back online. Syncing data...', 'success');
-                    // Refresh data
-                    setTimeout(async () => {
-                        try {
-                            const refreshPayload = await fetchLiveData(currentClient);
-                            if (refreshPayload) {
-                                dashboardData = mergeData(dashboardData, refreshPayload);
-                                updateStatusBar(dashboardData);
-                                renderRecentActivity(dashboardData);
-                                renderLeadJourney(dashboardData);
-                                renderLeads(dashboardData.recentLeads || []);
-                                renderAppointments(dashboardData.appointments || []);
-                            }
-                        } catch (error) {
-                            console.error('Failed to refresh after coming online', error);
+            window.addEventListener('online', () => {
+                updateOnlineStatus();
+                showToast('Connection Restored', 'You are back online. Syncing data...', 'success');
+                // Refresh data
+                setTimeout(async () => {
+                    try {
+                        const refreshPayload = await fetchLiveData(currentClient);
+                        if (refreshPayload) {
+                            dashboardData = mergeData(dashboardData, refreshPayload);
+                            updateStatusBar(dashboardData);
+                            renderRecentActivity(dashboardData);
+                            renderLeadJourney(dashboardData);
+                            renderLeads(dashboardData.recentLeads || []);
+                            renderAppointments(dashboardData.appointments || []);
                         }
-                    }, 1000);
-                });
+                    } catch (error) {
+                        console.error('Failed to refresh after coming online', error);
+                    }
+                }, 1000);
+            });
 
-                window.addEventListener('offline', updateOnlineStatus);
-            }
+            window.addEventListener('offline', updateOnlineStatus);
             updateOnlineStatus();
         }
 
         // Data freshness indicator
         function initDataFreshness() {
-            const freshnessText = document.getElementById('freshnessText');
-            if (!freshnessText) return;
-            if (globalThis.__dashFreshnessIntervalId != null) {
-                try {
-                    clearInterval(globalThis.__dashFreshnessIntervalId);
-                } catch (e) {
-                    /* ignore */
-                }
-                globalThis.__dashFreshnessIntervalId = null;
-            }
-            globalThis.__dashFreshnessIntervalId = setInterval(syncDashboardFreshnessUi, 5000);
+            if (!document.getElementById('freshnessText')) return;
+            setInterval(syncDashboardFreshnessUi, 5000);
             syncDashboardFreshnessUi();
         }
 
@@ -19737,6 +19210,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 `;
             }
         }
+
+        document.addEventListener('DOMContentLoaded', initDashboard);
+        window.addEventListener('beforeunload', stopLiveEvents);
 
         async function initTestCallButton(clientKey, config) {
             const testCallBtn = document.getElementById('testCallBtn');
@@ -20244,15 +19720,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const isVisible = pasteContainer.style.display === 'block';
                     pasteContainer.style.display = isVisible ? 'none' : 'block';
                     if (!isVisible && pasteInput) {
-                        try {
-                            pasteInput.focus({ preventScroll: true });
-                        } catch {
-                            try {
-                                pasteInput.focus();
-                            } catch {
-                                /* ignore */
-                            }
-                        }
+                        pasteInput.focus();
                     }
                 });
             }
@@ -21204,20 +20672,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
             }
         }
-        }
-        function scheduleDashboardBoot() {
-            if (globalThis.__dashboardBootScheduled) return;
-            globalThis.__dashboardBootScheduled = true;
-            const run = () =>
-                void initDashboard().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', run, { once: true });
-            } else {
-                run();
-            }
-        }
-        scheduleDashboardBoot();
-        window.addEventListener('beforeunload', stopLiveEvents);
     </script>
     <!-- Tooltip lives on body so it is not clipped by dashboard cards (overflow: hidden). -->
     <div id="weeklyChartTooltip" class="weekly-chart-tooltip" role="tooltip" hidden aria-hidden="true"></div>
