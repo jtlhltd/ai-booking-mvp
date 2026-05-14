@@ -8131,8 +8131,8 @@
     </div>
     
     <script>
-        // Boot: refs are stored on `__dashboardBootFns` after `stopLiveEvents` / `initDashboard` are declared
-        // (a legacy brace block in this file hides those names from the top-of-script listener closure).
+        // Boot: `__dashboardBootFns` is filled after `stopLiveEvents` / `initDashboard` are declared; the
+        // trailing boot `<script>` calls `globalThis.__initClientDashboard` or reads this bridge before dispatching `client-dashboard-boot`.
         const DEMO_CLIENT_KEY = 'demo_client';
         var __dashboardBootFns = { stop: null, init: null };
         globalThis.__dashboardBootFns = __dashboardBootFns;
