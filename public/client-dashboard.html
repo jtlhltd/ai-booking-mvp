@@ -7532,6 +7532,37 @@
             </div>
             </div>
         </section>
+        <script>
+            /* First paint before the large dashboard bundle finishes parse/execute: static HTML uses em dashes,
+               which looks identical to a failed boot. Replace only obvious placeholders on core count tiles. */
+            (function () {
+                try {
+                    var ids = [
+                        'statusTotalLeads',
+                        'statusTotalCalls',
+                        'statusCallsAnswered',
+                        'statusCallsNotAnswered'
+                    ];
+                    for (var i = 0; i < ids.length; i++) {
+                        var el = document.getElementById(ids[i]);
+                        if (!el) continue;
+                        var t = String(el.textContent || '').trim();
+                        if (
+                            t === '' ||
+                            t === '\u2014' ||
+                            t === '\u2013' ||
+                            t === '-' ||
+                            t === '\u2212' ||
+                            t === '\u2010'
+                        ) {
+                            el.textContent = '0';
+                        }
+                    }
+                } catch (e) {
+                    /* ignore */
+                }
+            })();
+        </script>
 
         <div id="outreachCapacityStrip" class="outreach-capacity-strip" hidden aria-live="polite"></div>
         <div id="usageMetersStrip" class="usage-meters-strip" hidden aria-live="polite"></div>
@@ -8194,6 +8225,8 @@
             { icon: '📊', title: 'Outcomes tracked', desc: 'Reach, no pickup, and conversation signals stay visible here.' },
             { icon: '🔄', title: 'Follow-ups scheduled', desc: 'Retries queue after voicemail, busy, or no-answer when configured.' }
         ];
+        /** When `/api/clients` omits `dashboardOutreachMode`, treat as non-outreach unless listed here (prefer server boolean). */
+        const OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK = [];
         const BASE_URL = window.location.origin;
         const THEME_KEY = 'dashboard_theme';
         /** True when server sent dashboardOutreachMode for this client. */
@@ -11600,7 +11633,23 @@ ${actionsRow}
             const conversion = formatPercent(data.conversionRate);
             const firstResponse = data.firstResponse || '—';
 
-            document.getElementById('statusTotalLeads').textContent = totalLeads;
+            const elTotalLeads = document.getElementById('statusTotalLeads');
+            const elTotalCalls = document.getElementById('statusTotalCalls');
+            if (!elTotalLeads || !elTotalCalls) {
+                try {
+                    if (typeof globalThis.__dashboardShowInitFailure === 'function') {
+                        globalThis.__dashboardShowInitFailure(
+                            new Error(
+                                `Dashboard KPI DOM missing (${!elTotalLeads ? '#statusTotalLeads' : ''}${
+                                    !elTotalLeads && !elTotalCalls ? ' ' : ''
+                                }${!elTotalCalls ? '#statusTotalCalls' : ''}).`
+                            )
+                        );
+                    }
+                } catch (_) {}
+                return;
+            }
+            elTotalLeads.textContent = totalLeads;
             const callsAnswered = data.metrics?.callsAnswered ?? 0;
             const callsNotAnswered = data.metrics?.callsNotAnswered ?? 0;
             const pendingLeadsOnly = data.metrics?.uniqueLeadsPendingOnly ?? 0;
@@ -11608,7 +11657,7 @@ ${actionsRow}
             const noAttempts = data.metrics?.callsNotAnsweredAttempts;
             const answerRate = data.metrics?.answerRate ?? 0;
             
-            document.getElementById('statusTotalCalls').textContent = totalCalls;
+            elTotalCalls.textContent = totalCalls;
             const uniqDial = Number(data.metrics?.uniqueLeadsCalled ?? data.totalCalls ?? 0) || 0;
             const sumLeads = callsAnswered + callsNotAnswered + pendingLeadsOnly;
             const sumsOk = uniqDial > 0 && sumLeads === uniqDial;
