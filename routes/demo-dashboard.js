@@ -83,6 +83,10 @@ export async function handleDemoDashboard(req, res, deps) {
     String(req.query.brief || '').toLowerCase() === 'yes';
   const leadsDashboardCap = briefRequested ? DASHBOARD_BRIEF_LEADS_CAP : RECENT_LEADS_DASHBOARD_CAP;
   const recentCallsFeedCap = briefRequested ? DASHBOARD_BRIEF_CALLS_CAP : RECENT_CALLS_FEED_CAP;
+  /** When true, skip appointments/service-mix/usage/A/B enrichment for faster first paint. */
+  const skipBriefEnrichment = !!briefRequested;
+  const stubQueryRows = async (rows = []) => ({ rows });
+  const stubBookingStats = async () => ({ rows: [{ total: 0, no_shows: 0, cancellations: 0 }] });
 
   const dashboardCallPhoneAggSql = `
     SELECT phone_key, calls_n, reached_max
@@ -595,8 +599,10 @@ export async function handleDemoDashboard(req, res, deps) {
         [clientKey, activityRollingSinceIso]
       ),
       loadDashboardCallMetricsBundle(),
-      query(
-        `
+      skipBriefEnrichment
+        ? stubBookingStats()
+        : query(
+            `
         SELECT COUNT(*) AS total,
                COUNT(*) FILTER (WHERE status IN ('no_show','no-show')) AS no_shows,
                COUNT(*) FILTER (WHERE status IN ('cancelled','canceled')) AS cancellations
@@ -604,10 +610,12 @@ export async function handleDemoDashboard(req, res, deps) {
         WHERE client_key = $1
           AND created_at >= ${daysAgoSql(7)}
       `,
-        [clientKey]
-      ),
-      query(
-        `
+            [clientKey]
+          ),
+      skipBriefEnrichment
+        ? stubQueryRows()
+        : query(
+            `
         SELECT COALESCE(service, 'General') AS service,
                COUNT(*) AS count
         FROM leads
@@ -616,10 +624,12 @@ export async function handleDemoDashboard(req, res, deps) {
         ORDER BY count DESC
         LIMIT 5
       `,
-        [clientKey]
-      ),
-      query(
-        `
+            [clientKey]
+          ),
+      skipBriefEnrichment
+        ? stubQueryRows()
+        : query(
+            `
         SELECT COALESCE(l.service, 'General') AS service,
                COUNT(*)::int AS appointment_count
         FROM appointments a
@@ -629,8 +639,8 @@ export async function handleDemoDashboard(req, res, deps) {
         GROUP BY COALESCE(l.service, 'General')
         ORDER BY appointment_count DESC
       `,
-        [clientKey]
-      ),
+            [clientKey]
+          ),
       query(
         `
         WITH lead_lookup AS (
@@ -677,8 +687,10 @@ export async function handleDemoDashboard(req, res, deps) {
       `,
         [clientKey]
       ),
-      query(
-        `
+      skipBriefEnrichment
+        ? stubQueryRows()
+        : query(
+            `
         SELECT DISTINCT ON (l.phone_match_key)
                l.created_at AS lead_created,
                fc.call_created AS call_created
@@ -710,8 +722,8 @@ export async function handleDemoDashboard(req, res, deps) {
         ORDER BY l.phone_match_key, fc.call_created ASC, l.created_at ASC
         LIMIT 500
       `,
-        [clientKey]
-      ),
+            [clientKey]
+          ),
       query(
         `
         WITH daily AS (
@@ -782,8 +794,10 @@ export async function handleDemoDashboard(req, res, deps) {
       `,
         [clientKey]
       ),
-      query(
-        `
+      skipBriefEnrichment
+        ? stubQueryRows()
+        : query(
+            `
         SELECT a.id,
                a.start_iso,
                a.end_iso,
@@ -797,8 +811,8 @@ export async function handleDemoDashboard(req, res, deps) {
         ORDER BY a.start_iso ASC
         LIMIT 5
       `,
-        [clientKey]
-      ),
+            [clientKey]
+          ),
       query(
         `
         SELECT COUNT(*)::int AS n
@@ -883,8 +897,10 @@ export async function handleDemoDashboard(req, res, deps) {
       isPostgres
         ? query(demoOutreachQueuePulseSqlPostgres, [clientKey, activityRollingSinceIso, tenantTz])
         : query(demoOutreachQueuePulseSqlite, [clientKey, activityRollingSinceIso]),
-      query(
-        `
+      skipBriefEnrichment
+        ? stubQueryRows()
+        : query(
+            `
         SELECT
           (SELECT COUNT(*) FROM calls WHERE client_key = $1 AND created_at >= ${daysAgoSql(7)}) AS calls_7d,
           (SELECT COALESCE(SUM(COALESCE(duration, 0)), 0) FROM calls WHERE client_key = $1 AND created_at >= ${daysAgoSql(
@@ -899,8 +915,8 @@ export async function handleDemoDashboard(req, res, deps) {
             30
           )}) AS appointments_30d
         `,
-        [clientKey]
-      )
+            [clientKey]
+          )
     ]);
 
     const callCounts = callMetricsBundle.callCounts;
@@ -1063,7 +1079,7 @@ export async function handleDemoDashboard(req, res, deps) {
       oqPulse.dial_slots_used_local_today != null ? parseInt(oqPulse.dial_slots_used_local_today, 10) || 0 : null;
 
     let outboundQueueSchedule = null;
-    if (isPostgres) {
+    if (!skipBriefEnrichment && isPostgres) {
       try {
         const scheduleRows = await query(
           `
@@ -1192,7 +1208,7 @@ export async function handleDemoDashboard(req, res, deps) {
     let nextDialExpectedReason = null;
     let nextQueuePreviewError = null;
     try {
-      if (isPostgres) {
+      if (!skipBriefEnrichment && isPostgres) {
         const { hasOutboundWeekdayJourneyDialBlocked } = await import('../db.js');
         const qRows = await query(
           `
@@ -1393,15 +1409,17 @@ export async function handleDemoDashboard(req, res, deps) {
     }
     const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || '';
     const GENERIC_OUTCOMES = new Set(['', 'failed', 'error', 'unknown']);
-    const rowsNeedingOutcome = (recentCallRows.rows || [])
-      .filter((r) => {
-        if (!r.call_id || String(r.call_id).startsWith('failed_q')) return false;
-        const o = String(r.outcome ?? '').trim().toLowerCase();
-        return GENERIC_OUTCOMES.has(o);
-      })
-      .slice(0, 8);
+    const rowsNeedingOutcome = skipBriefEnrichment
+      ? []
+      : (recentCallRows.rows || [])
+          .filter((r) => {
+            if (!r.call_id || String(r.call_id).startsWith('failed_q')) return false;
+            const o = String(r.outcome ?? '').trim().toLowerCase();
+            return GENERIC_OUTCOMES.has(o);
+          })
+          .slice(0, 8);
     const vapiByCallId = new Map();
-    if (vapiKey && rowsNeedingOutcome.length > 0) {
+    if (!skipBriefEnrichment && vapiKey && rowsNeedingOutcome.length > 0) {
       const fetched = await Promise.all(
         rowsNeedingOutcome.map(async (r) => {
           const ac = new AbortController();
@@ -1665,6 +1683,40 @@ export async function handleDemoDashboard(req, res, deps) {
       roiMultiplier != null && roiMultiplier > 0 ? (roiMultiplier - 1) * 100 : null;
 
     const trimAbExp = (x) => (x != null && String(x).trim() !== '' ? String(x).trim() : '');
+
+    let outboundAbTest;
+    if (skipBriefEnrichment) {
+      outboundAbTest = {
+        deferred: true,
+        mode: 'deferred',
+        voice: { experimentName: null, experimentNameSource: null, summary: null },
+        opening: { experimentName: null, experimentNameSource: null, summary: null },
+        script: { experimentName: null, experimentNameSource: null, summary: null },
+        legacy: { experimentName: null, experimentNameSource: null, summary: null },
+        experimentName: null,
+        experimentNameSource: null,
+        summary: null,
+        recentFeedVariantCounts: {},
+        recentFeedAbByDimension: { voice: {}, opening: {}, script: {} },
+        focusDimension: trimAbExp(client?.vapi?.outboundAbFocusDimension) || null,
+        dialActiveDimensions: [],
+        dialWarning: null,
+        vapiAssistantLive: null,
+        bundlePhase:
+          client?.vapi?.outboundAbBundlePhase != null &&
+          String(client.vapi.outboundAbBundlePhase).trim() !== ''
+            ? String(client.vapi.outboundAbBundlePhase).trim()
+            : null,
+        bundleStartedAt:
+          client?.vapi?.outboundAbBundleAt != null &&
+          String(client.vapi.outboundAbBundleAt).trim() !== ''
+            ? String(client.vapi.outboundAbBundleAt).trim()
+            : null,
+        liveResults: null,
+        reviewPending: false,
+        reviewPendingSince: null
+      };
+    } else {
     let voiceExpName = trimAbExp(client?.vapi?.outboundAbVoiceExperiment);
     let openingExpName = trimAbExp(client?.vapi?.outboundAbOpeningExperiment);
     let scriptExpName = trimAbExp(client?.vapi?.outboundAbScriptExperiment);
@@ -1881,47 +1933,7 @@ export async function handleDemoDashboard(req, res, deps) {
     const reviewPendingSince =
       reviewPending && reviewPendingSinceRaw !== '' ? reviewPendingSinceRaw : null;
 
-    const uRow = usageMetersRow.rows?.[0] || {};
-    const sec7 = Number(uRow.talk_seconds_7d) || 0;
-    const sec30 = Number(uRow.talk_seconds_30d) || 0;
-    const capCalls = parseInt(String(process.env.USAGE_CAP_MONTHLY_CALLS || '').trim(), 10);
-    const capMins = parseInt(String(process.env.USAGE_CAP_MONTHLY_MINUTES || '').trim(), 10);
-    const usageMeters = {
-      asOf: new Date().toISOString(),
-      windows: {
-        last7Days: {
-          dialAttempts: Number(uRow.calls_7d) || 0,
-          talkMinutes: Math.round((sec7 / 60) * 10) / 10
-        },
-        last30Days: {
-          dialAttempts: Number(uRow.calls_30d) || 0,
-          talkMinutes: Math.round((sec30 / 60) * 10) / 10,
-          newLeads: Number(uRow.leads_new_30d) || 0,
-          appointments: Number(uRow.appointments_30d) || 0
-        }
-      },
-      caps: {
-        monthlyDialAttempts: Number.isFinite(capCalls) && capCalls > 0 ? capCalls : null,
-        monthlyTalkMinutes: Number.isFinite(capMins) && capMins > 0 ? capMins : null,
-        note:
-          'Optional USAGE_CAP_MONTHLY_CALLS / USAGE_CAP_MONTHLY_MINUTES on Render — display hints until billing enforces limits.'
-      },
-      plan: {
-        name: trimEnvDashboard('USAGE_PLAN_NAME'),
-        periodNote: trimEnvDashboard('USAGE_PLAN_PERIOD_NOTE'),
-        upgradeUrl: trimEnvDashboard('USAGE_UPGRADE_URL'),
-        supportEmail: trimEnvDashboard('SUPPORT_CONTACT_EMAIL')
-      }
-    };
-
-    const dashboardExperience = buildDashboardExperience(client, activityAsOfLondon.toISO());
-
-    const payload = {
-      ok: true,
-      source: 'live',
-      briefInitialLoad: briefRequested,
-      recentLeadsListCap: leadsDashboardCap,
-      outboundAbTest: {
+    outboundAbTest = {
         mode: dimensionalMode ? 'dimensional' : 'legacy',
         voice: {
           experimentName: voiceExpName || null,
@@ -1965,7 +1977,51 @@ export async function handleDemoDashboard(req, res, deps) {
         liveResults,
         reviewPending,
         reviewPendingSince
+      };
+    }
+
+    const uRow = skipBriefEnrichment ? {} : usageMetersRow.rows?.[0] || {};
+    const sec7 = Number(uRow.talk_seconds_7d) || 0;
+    const sec30 = Number(uRow.talk_seconds_30d) || 0;
+    const capCalls = parseInt(String(process.env.USAGE_CAP_MONTHLY_CALLS || '').trim(), 10);
+    const capMins = parseInt(String(process.env.USAGE_CAP_MONTHLY_MINUTES || '').trim(), 10);
+    const usageMeters = {
+      asOf: new Date().toISOString(),
+      windows: {
+        last7Days: {
+          dialAttempts: Number(uRow.calls_7d) || 0,
+          talkMinutes: Math.round((sec7 / 60) * 10) / 10
+        },
+        last30Days: {
+          dialAttempts: Number(uRow.calls_30d) || 0,
+          talkMinutes: Math.round((sec30 / 60) * 10) / 10,
+          newLeads: Number(uRow.leads_new_30d) || 0,
+          appointments: Number(uRow.appointments_30d) || 0
+        }
       },
+      caps: {
+        monthlyDialAttempts: Number.isFinite(capCalls) && capCalls > 0 ? capCalls : null,
+        monthlyTalkMinutes: Number.isFinite(capMins) && capMins > 0 ? capMins : null,
+        note:
+          'Optional USAGE_CAP_MONTHLY_CALLS / USAGE_CAP_MONTHLY_MINUTES on Render — display hints until billing enforces limits.'
+      },
+      plan: {
+        name: trimEnvDashboard('USAGE_PLAN_NAME'),
+        periodNote: trimEnvDashboard('USAGE_PLAN_PERIOD_NOTE'),
+        upgradeUrl: trimEnvDashboard('USAGE_UPGRADE_URL'),
+        supportEmail: trimEnvDashboard('SUPPORT_CONTACT_EMAIL')
+      }
+    };
+
+    const dashboardExperience = buildDashboardExperience(client, activityAsOfLondon.toISO());
+
+    const payload = {
+      ok: true,
+      source: 'live',
+      briefInitialLoad: briefRequested,
+      briefEnrichmentSkipped: skipBriefEnrichment,
+      recentLeadsListCap: leadsDashboardCap,
+      outboundAbTest,
       metrics: {
         totalLeads,
         totalCalls: displayCalls,

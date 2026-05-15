@@ -7815,6 +7815,8 @@
             return k === DEMO_CLIENT_KEY || DEMO_URL_ALIASES.has(k);
         }
         /** Outreach-only UI: no appointments/ROI/conversion tiles; copy avoids booking/calendar framing */
+        /** Bookmarks may use either spelling; used before /api/clients returns dashboardOutreachMode. */
+        const OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK = ['d2d-xpress-tom', 'u2d-xpress-tom'];
         const OUTREACH_DASHBOARD_WORKFLOW_STEPS = [
             { icon: '📥', title: 'Leads received', desc: 'Contacts arrive from your lists, uploads, and integrations.' },
             { icon: '📞', title: 'Outbound calls', desc: 'We dial according to your hours and priorities and log every attempt.' },
@@ -7829,6 +7831,14 @@
                 return window.__dashboardOutreachMode;
             }
             return false;
+        }
+
+        function guessOutreachBriefForClient(clientKey) {
+            if (!clientKey || clientKey === DEMO_CLIENT_KEY || isDemoClientKey(clientKey)) return false;
+            if (typeof window.__dashboardOutreachMode === 'boolean' && clientKey === currentClient) {
+                return window.__dashboardOutreachMode;
+            }
+            return OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK.includes(clientKey);
         }
         function shouldShowRoiPanel(clientKey) {
             return !isOutreachDashboardClient(clientKey);
@@ -10591,7 +10601,8 @@ ${actionsRow}
         let outreachBriefListPending = false;
         const DASHBOARD_DEFER_SECONDARY_LOADS = globalThis.__dashboardDeferSecondaryLoads !== false;
         const DASHBOARD_DEFERRED_LOAD_DELAY_MS = 2500;
-        const DASHBOARD_FULL_HYDRATE_IDLE_MS = 10000;
+        const DASHBOARD_FULL_HYDRATE_IDLE_MS = 30000;
+        const DASHBOARD_DEFERRED_WAVE2_DELAY_MS = 800;
         const DASHBOARD_LEAD_RENDER_INITIAL = 80;
         const DASHBOARD_LEAD_RENDER_BATCH = 100;
         let dashboardDeferredLoadsRan = false;
@@ -10723,6 +10734,8 @@ ${actionsRow}
                         {};
                     renderChart(chartCfg, dashboardData);
                     renderCalls(dashboardData.recentCalls || []);
+                }
+                if (!dashboardData.outboundAbTest?.deferred) {
                     renderTomAbTestSection(dashboardData);
                 }
                 loadLeadsFunnelSegmentForClient(currentClient);
@@ -10754,7 +10767,11 @@ ${actionsRow}
             if (!dashboardDeferEnabled() || !outreachBriefListPending || outreachFullHydrateIdleScheduled) return;
             outreachFullHydrateIdleScheduled = true;
             setTimeout(() => {
-                if (outreachBriefListPending && !outreachFullHydrateInFlight) {
+                if (
+                    outreachBriefListPending &&
+                    !outreachFullHydrateInFlight &&
+                    document.visibilityState === 'visible'
+                ) {
                     runOutreachFullHydrate({ userInitiated: false });
                 }
             }, DASHBOARD_FULL_HYDRATE_IDLE_MS);
@@ -10851,40 +10868,47 @@ ${actionsRow}
         async function runDashboardTierNowLoads({ config, callsToRender }) {
             const outreach = isOutreachDashboardClient(currentClient);
             const tasks = [
-                renderActiveIndicator(dashboardData).catch((err) => console.warn('Active indicator failed', err)),
-                renderCallQuality(dashboardData).catch((err) => console.warn('Call quality failed', err)),
                 refreshOutboundSequenceWindow(currentClient).catch((err) => console.warn('Outbound sequence window failed', err)),
                 loadFollowUpQueue(currentClient, { deferEnrichment: dashboardDeferEnabled() }).catch((err) => console.warn('Follow-up list failed', err)),
             ];
             if (!outreach) {
-                tasks.push(renderRetryQueue(dashboardData).catch((err) => console.warn('Retry queue failed', err)));
+                tasks.push(
+                    renderActiveIndicator(dashboardData).catch((err) => console.warn('Active indicator failed', err)),
+                    renderCallQuality(dashboardData).catch((err) => console.warn('Call quality failed', err))
+                );
             }
             await Promise.all(tasks);
         }
 
-        async function runDashboardDeferredLoads({ config, callsToRender }) {
-            if (dashboardDeferredLoadsRan) return;
-            dashboardDeferredLoadsRan = true;
+        async function runDashboardDeferredWave1({ config, callsToRender }) {
             const outreach = isOutreachDashboardClient(currentClient);
-            const tasks = [];
+            const tasks = [
+                renderCallRecordings(callsToRender).catch((err) => console.warn('Call recordings failed', err)),
+                renderVoicemailListener().catch((err) => console.warn('Voicemail listener failed', err)),
+                renderRetryQueue(dashboardData).catch((err) => console.warn('Retry queue failed', err)),
+                renderCallQuality(dashboardData).catch((err) => console.warn('Call quality failed', err)),
+                renderActiveIndicator(dashboardData).catch((err) => console.warn('Active indicator failed', err)),
+            ];
             if (!outreach) {
                 tasks.push(
                     renderSystemStatus(config).catch((err) => console.warn('System status failed', err)),
                     loadIntegrationHealth(currentClient).catch((err) => console.warn('Integration health failed', err)),
-                    renderCalendarDetails(dashboardData).catch((err) => console.warn('Calendar details failed', err)),
-                    renderCallRecordings(callsToRender).catch((err) => console.warn('Call recordings failed', err)),
-                    renderVoicemailListener().catch((err) => console.warn('Voicemail listener failed', err))
+                    renderCalendarDetails(dashboardData).catch((err) => console.warn('Calendar details failed', err))
                 );
             }
-            tasks.push(
+            await Promise.all(tasks);
+        }
+
+        async function runDashboardDeferredWave2() {
+            const tasks = [
                 renderCallInsights(dashboardData).catch((err) => console.warn('Call insights failed', err)),
                 renderDailySummary().catch((err) => console.warn('Daily summary failed', err)),
                 renderOpsHealth().catch((err) => console.warn('Ops health failed', err)),
                 (async () => {
                     initDncUi();
                     await renderDncList();
-                })().catch((err) => console.warn('DNC list failed', err))
-            );
+                })().catch((err) => console.warn('DNC list failed', err)),
+            ];
             if (followUpQueueNeedsEnrichment) {
                 tasks.push(
                     enrichFollowUpQueueHandoffAndStats(currentClient).catch((err) =>
@@ -10895,14 +10919,70 @@ ${actionsRow}
             await Promise.all(tasks);
         }
 
-        function scheduleDashboardDeferredLoads(ctx) {
-            if (!dashboardDeferEnabled()) {
+        async function runDashboardDeferredLoads({ config, callsToRender }) {
+            if (dashboardDeferredLoadsRan) return;
+            dashboardDeferredLoadsRan = true;
+            await runDashboardDeferredWave1({ config, callsToRender });
+            await new Promise((resolve) => setTimeout(resolve, DASHBOARD_DEFERRED_WAVE2_DELAY_MS));
+            await runDashboardDeferredWave2();
+        }
+
+        let dashboardLazyPanelObserver = null;
+
+        function initDashboardLazyPanelObservers(ctx) {
+            if (dashboardLazyPanelObserver || typeof IntersectionObserver !== 'function') return;
+            const targets = [
+                document.getElementById('followUpQueueSection'),
+                document.querySelector('.dashboard-section--operations-row'),
+                document.getElementById('callInsightsSection') || document.querySelector('.dashboard-section--analytics-row'),
+            ].filter(Boolean);
+            if (!targets.length) return;
+            dashboardLazyPanelObserver = new IntersectionObserver((entries) => {
+                for (const entry of entries) {
+                    if (!entry.isIntersecting) continue;
+                    dashboardLazyPanelObserver.disconnect();
+                    dashboardLazyPanelObserver = null;
+                    scheduleDashboardDeferredLoads(ctx, { force: true });
+                    break;
+                }
+            }, { root: null, rootMargin: '120px 0px', threshold: 0.01 });
+            targets.forEach((el) => dashboardLazyPanelObserver.observe(el));
+        }
+
+        const DASHBOARD_DEFERRED_LOAD_FALLBACK_MS = 4500;
+
+        function paintDeferredPanelPlaceholders() {
+            if (currentClient === DEMO_CLIENT_KEY) return;
+            const panels = [
+                ['call-recordings', 'Loading recordings…'],
+                ['voicemail-listener', 'Loading voicemails…'],
+                ['retry-queue', 'Loading retry queue…'],
+            ];
+            for (const [id, label] of panels) {
+                const el = document.getElementById(id);
+                if (el && !el.textContent.trim()) {
+                    el.innerHTML = `<div class="empty-state-message" style="padding:16px;">${label}</div>`;
+                }
+            }
+        }
+
+        function scheduleDashboardDeferredLoads(ctx, { force = false } = {}) {
+            paintDeferredPanelPlaceholders();
+            const runDeferred = () => {
+                if (dashboardDeferredLoadsRan) return;
                 runDashboardDeferredLoads(ctx).catch((e) => console.warn('[DASHBOARD] deferred loads failed', e));
+            };
+            if (!dashboardDeferEnabled()) {
+                runDeferred();
                 return;
             }
-            scheduleOnDashboardIdle(() => {
-                runDashboardDeferredLoads(ctx).catch((e) => console.warn('[DASHBOARD] deferred loads failed', e));
-            });
+            if (!force) {
+                initDashboardLazyPanelObservers(ctx);
+            }
+            scheduleOnDashboardIdle(runDeferred);
+            setTimeout(() => {
+                if (!dashboardDeferredLoadsRan) runDeferred();
+            }, DASHBOARD_DEFERRED_LOAD_FALLBACK_MS);
         }
 
         function setDashboardApiErrorVisible(show, detailText = '') {
@@ -14330,6 +14410,10 @@ ${actionsRow}
                 return;
             }
             const ab = data && data.outboundAbTest;
+            if (ab && ab.deferred) {
+                root.innerHTML = '<p class="tom-ab-test-meta" style="margin:0 0 12px 0;">Loading A/B experiment data in the background…</p>';
+                return;
+            }
             flushTomAbVisibleFieldToDraft(getTomAbActiveUploadDimension());
             syncTomAbCreativeTextareasFromServer(ab);
             applyTomAbDraftToVisibleField(getTomAbActiveUploadDimension());
@@ -18698,6 +18782,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     hint.textContent = '';
                     hint.hidden = true;
                 }
+                if (barHost) barHost.innerHTML = '';
+                setCallRecordingsChromeVisible(false);
+                container.innerHTML = `
+                    <div class="empty-state" style="padding: 20px;">
+                        <span class="empty-state-icon">🎙️</span>
+                        <div class="empty-state-title">No recordings yet</div>
+                        <div class="empty-state-message">Call recordings will appear here after calls are made.</div>
+                    </div>
+                `;
                 return;
             }
 
@@ -18822,6 +18915,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
 
             try {
+                container.innerHTML = '<div class="empty-state-message" style="padding:16px;">Loading recordings…</div>';
                 const response = await fetch(
                     `${BASE_URL}/api/call-recordings/${encodeURIComponent(currentClient)}?limit=80`,
                     { cache: 'no-store' }
@@ -18857,9 +18951,29 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     };
                     setCallRecordingsChromeVisible(true);
                     repaintCallRecordingsList();
+                } else {
+                    const errMsg = (payload && payload.error) ? String(payload.error) : `HTTP ${response.status}`;
+                    container.innerHTML = `
+                        <div class="empty-state" style="padding: 20px;">
+                            <span class="empty-state-icon">🎙️</span>
+                            <div class="empty-state-title">Unable to load recordings</div>
+                            <div class="empty-state-message">${escapeHtml(errMsg)}</div>
+                        </div>
+                    `;
+                    if (barHost) barHost.innerHTML = '';
+                    setCallRecordingsChromeVisible(false);
                 }
             } catch (error) {
                 console.error('Failed to load call recordings', error);
+                container.innerHTML = `
+                    <div class="empty-state" style="padding: 20px;">
+                        <span class="empty-state-icon">🎙️</span>
+                        <div class="empty-state-title">Unable to load recordings</div>
+                        <div class="empty-state-message">Please refresh and try again.</div>
+                    </div>
+                `;
+                if (barHost) barHost.innerHTML = '';
+                setCallRecordingsChromeVisible(false);
             }
         }
 
@@ -19231,6 +19345,39 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             showToast('New Call Logged', `${call.name || 'Prospect'}: ${call.summary || 'Call completed'}`, 'info');
         }
 
+        async function fetchClientConfigForDashboard(clientKey) {
+            if (!clientKey || clientKey === DEMO_CLIENT_KEY) return null;
+            try {
+                const response = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(clientKey)}`, { cache: 'no-store' });
+                if (!response.ok) return null;
+                const data = await response.json();
+                if (!data?.ok || !data.client) return null;
+                return data.client;
+            } catch (err) {
+                console.warn('[DASHBOARD] Could not fetch client config:', err);
+                return null;
+            }
+        }
+
+        function scheduleNonCriticalDashboardInit(config, hasClientConfig) {
+            const run = () => {
+                if (config.whiteLabel || config.primaryColor || config.secondaryColor || config.accentColor) {
+                    try {
+                        applyClientBranding(config);
+                    } catch (e) {
+                        console.warn('[DASHBOARD] branding apply failed', e);
+                    }
+                }
+                loadBuildFingerprint();
+                initTestCallButton(currentClient, config).catch((err) => console.warn('Test call button init error:', err));
+            };
+            if (typeof requestIdleCallback === 'function') {
+                requestIdleCallback(run, { timeout: 3000 });
+            } else {
+                setTimeout(run, 50);
+            }
+        }
+
         async function initDashboard() {
             currentClient = getClientFromURL();
             activityFeedOutcomeFilter = 'all';
@@ -19249,51 +19396,59 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initTomAbUnloadDraftGuard();
             initDashboardCollapsibleUi();
 
-            // Fetch client config from API if not demo
             let clientConfig = null;
+            let outreachBriefHydrate = false;
+            const guessBriefBoot = guessOutreachBriefForClient(currentClient);
+
             if (currentClient !== DEMO_CLIENT_KEY) {
+                dashboardData = createEmptyDashboardData();
+                const banner = document.getElementById('demoBanner');
+                if (banner) banner.style.display = 'none';
                 try {
-                    console.log('[DASHBOARD] Fetching client config from:', `${BASE_URL}/api/clients/${currentClient}`);
-                    const response = await fetch(`${BASE_URL}/api/clients/${currentClient}`);
-                    console.log('[DASHBOARD] Response status:', response.status, response.ok);
-                    
-                    if (response.ok) {
-                const data = await response.json();
-                        console.log('[DASHBOARD] API response data:', data);
-                        
-                        if (data.ok && data.client) {
-                            clientConfig = data.client;
-                            window.__dashboardOutreachMode =
-                                typeof clientConfig.dashboardOutreachMode === 'boolean'
-                                    ? clientConfig.dashboardOutreachMode
-                                    : OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK.includes(currentClient);
-                            loadLeadsFunnelSegmentForClient(currentClient);
-                            syncLeadsFunnelChipUi();
-                            console.log('[DASHBOARD] Loaded client config:', {
-                                name: clientConfig.name || clientConfig.displayName,
-                                description: clientConfig.description,
-                                tagline: clientConfig.tagline,
-                                industry: clientConfig.industry,
-                                hasWhiteLabel: !!clientConfig.whiteLabel,
-                                hasBranding: !!clientConfig.whiteLabel?.branding,
-                                primaryColor: clientConfig.whiteLabel?.branding?.primaryColor || clientConfig.primaryColor,
-                                secondaryColor: clientConfig.whiteLabel?.branding?.secondaryColor || clientConfig.secondaryColor,
-                                accentColor: clientConfig.whiteLabel?.branding?.accentColor || clientConfig.accentColor,
-                                hasClientConfig: true
-                            });
-                        } else {
-                            console.warn('[DASHBOARD] API response missing client data:', {
-                                hasOk: !!data.ok,
-                                hasClient: !!data.client,
-                                data: data
-                            });
-                        }
+                    updateStatusBar(dashboardData);
+                } catch (e) {
+                    console.warn('[DASHBOARD] early empty KPI paint failed', e);
+                }
+
+                const clientsPromise = fetchClientConfigForDashboard(currentClient);
+                const livePromise = fetchLiveData(currentClient, { brief: guessBriefBoot });
+
+                const [fetchedConfig, livePayload] = await Promise.all([clientsPromise, livePromise]);
+
+                if (fetchedConfig) {
+                    clientConfig = fetchedConfig;
+                    window.__dashboardOutreachMode =
+                        typeof clientConfig.dashboardOutreachMode === 'boolean'
+                            ? clientConfig.dashboardOutreachMode
+                            : OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK.includes(currentClient);
+                    loadLeadsFunnelSegmentForClient(currentClient);
+                    syncLeadsFunnelChipUi();
+                }
+
+                const actualBrief = isOutreachDashboardClient(currentClient);
+                if (actualBrief !== guessBriefBoot) {
+                    const corrected = await fetchLiveData(currentClient, { brief: actualBrief });
+                    if (corrected) {
+                        dashboardData = mergeData({}, corrected, false);
+                        outreachBriefHydrate = corrected.briefInitialLoad === true;
+                        outreachBriefListPending = outreachBriefHydrate;
+                        dashboardLivePayloadFailed = false;
+                        setDashboardApiErrorVisible(false, '');
+                    } else if (livePayload) {
+                        dashboardData = mergeData({}, livePayload, false);
+                        outreachBriefHydrate = livePayload.briefInitialLoad === true;
+                        outreachBriefListPending = outreachBriefHydrate;
                     } else {
-                        const errorText = await response.text();
-                        console.error('[DASHBOARD] API error response:', response.status, errorText);
+                        dashboardLivePayloadFailed = true;
+                        setDashboardApiErrorVisible(true, lastDashboardFetchError);
                     }
-                } catch (err) {
-                    console.error('[DASHBOARD] Could not fetch client config:', err);
+                } else if (livePayload) {
+                    dashboardData = mergeData({}, livePayload, false);
+                    outreachBriefHydrate = livePayload.briefInitialLoad === true;
+                    outreachBriefListPending = outreachBriefHydrate;
+                } else {
+                    dashboardLivePayloadFailed = true;
+                    setDashboardApiErrorVisible(true, lastDashboardFetchError);
                 }
             }
             
@@ -19356,22 +19511,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
             initTomAbTestSetupPanel();
-            
-            // Always apply branding if available (as a fallback, in case updateHeader didn't)
-            // This ensures colors and branding work even with partial data
-            if (config.whiteLabel || config.primaryColor || config.secondaryColor || config.accentColor) {
-                // Small delay to ensure DOM is ready
-                setTimeout(() => {
-                    applyClientBranding(config);
-                }, 100);
-            }
+
             initThemeToggle();
             initDashboardListSearch();
             initLeadsFunnelFilterUi();
             initLeadJourneyFunnelClicks();
             initOutboundSequenceWindowUi();
-            // Init test call button - it will fetch config if needed
-            initTestCallButton(currentClient, config).catch(err => console.warn('Test call button init error:', err));
             initModalControls();
             initImporter();
             initDashboardExperienceUi();
@@ -19379,58 +19524,30 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initKeyboardShortcuts();
             initOfflineDetection();
             initDataFreshness();
+            scheduleNonCriticalDashboardInit(config, !!clientConfig);
 
-            // Initialize with empty data structure for real clients, demo data only for demo client
-            if (currentClient === DEMO_CLIENT_KEY) {
-                dashboardData = { ...DEMO_DATA };
-                document.getElementById('demoBanner').style.display = 'block';
-                stopLiveEvents();
-            } else {
-                dashboardData = createEmptyDashboardData();
-                const banner = document.getElementById('demoBanner');
-                if (banner) banner.style.display = 'none';
-            }
+            dashboardLivePayloadFailed = false;
+            lastDashboardFetchError = '';
+            setDashboardApiErrorVisible(false, '');
 
-            // Show loading skeletons
             const loadingContainers = ['leads-list', 'upcoming-appointments', 'recent-calls', 'recent-activity'];
-            loadingContainers.forEach(id => {
+            loadingContainers.forEach((id) => {
                 const container = document.getElementById(id);
                 if (container) showSkeleton(container, id === 'recent-activity' ? 'metrics' : 'list');
             });
 
-            // Always try to fetch real data from API
-            dashboardLivePayloadFailed = false;
-            lastDashboardFetchError = '';
-            setDashboardApiErrorVisible(false, '');
-            let outreachBriefHydrate = false;
-            try {
-                const useInitialBrief =
-                    currentClient !== DEMO_CLIENT_KEY && isOutreachDashboardClient(currentClient);
-                const livePayload = await fetchLiveData(currentClient, { brief: useInitialBrief });
-                if (livePayload) {
-                    // Use real data from API, don't merge with demo data
-                    dashboardData = mergeData({}, livePayload, currentClient === DEMO_CLIENT_KEY);
-                    outreachBriefHydrate = livePayload.briefInitialLoad === true;
-                    outreachBriefListPending = outreachBriefHydrate;
-                } else if (currentClient === DEMO_CLIENT_KEY) {
-                    // Only use demo data if it's the demo client and no API data
-                    dashboardData = { ...DEMO_DATA };
-                } else {
-                    // fetchLiveData returns null on non-OK HTTP, missing payload.ok, timeout, or network error
-                    dashboardLivePayloadFailed = true;
-                    setDashboardApiErrorVisible(true, lastDashboardFetchError);
-                }
-            } catch (error) {
-                console.error('Failed to load dashboard data', error);
-                // Only show error for real clients, demo client can use demo data
-                if (currentClient !== DEMO_CLIENT_KEY) {
-                    dashboardLivePayloadFailed = true;
-                    lastDashboardFetchError = lastDashboardFetchError || String(error.message || error).slice(0, 240);
-                    setDashboardApiErrorVisible(true, lastDashboardFetchError);
-                    const leadsContainer = document.getElementById('leads-list');
-                    if (leadsContainer) {
-                        showError(leadsContainer, 'Unable to load dashboard data. Please refresh the page.', () => location.reload());
+            if (currentClient === DEMO_CLIENT_KEY) {
+                dashboardData = { ...DEMO_DATA };
+                const demoBanner = document.getElementById('demoBanner');
+                if (demoBanner) demoBanner.style.display = 'block';
+                stopLiveEvents();
+                try {
+                    const livePayload = await fetchLiveData(currentClient, { brief: false });
+                    if (livePayload) {
+                        dashboardData = mergeData(dashboardData, livePayload, true);
                     }
+                } catch (error) {
+                    console.warn('[DASHBOARD] demo live fetch failed', error);
                 }
             }
 
@@ -19455,9 +19572,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 prefillRoiSettingsInputs();
                 initRoiSettingsPanel();
             }
-            loadBuildFingerprint();
-            loadLeadsFunnelSegmentForClient(currentClient);
-            syncLeadsFunnelChipUi();
+            if (currentClient === DEMO_CLIENT_KEY) {
+                loadLeadsFunnelSegmentForClient(currentClient);
+                syncLeadsFunnelChipUi();
+            }
             renderLeadJourney(dashboardData);
             renderLeads(dashboardData.recentLeads || []);
             renderAppointments(dashboardData.appointments || []);
@@ -19494,7 +19612,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (dashboardPollInFlight) return;
                 dashboardPollInFlight = true;
                 try {
-                    const refreshPayload = await fetchLiveData(currentClient);
+                    const pollBrief = outreachBriefListPending && isOutreachDashboardClient(currentClient);
+                    const refreshPayload = await fetchLiveData(currentClient, { brief: pollBrief });
                     lastDataUpdate = new Date();
                     if (refreshPayload) {
                         dashboardLivePayloadFailed = false;
@@ -19505,6 +19624,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         if (fp === lastDashboardPollFingerprint) return;
                         lastDashboardPollFingerprint = fp;
                         dashboardData = merged;
+                        if (refreshPayload.briefInitialLoad === true) {
+                            outreachBriefListPending = true;
+                        } else if (!pollBrief) {
+                            outreachBriefListPending = false;
+                        }
                         updateStatusBar(dashboardData);
                         renderRecentActivity(dashboardData);
                         if (shouldShowRoiPanel(currentClient)) {
@@ -19512,31 +19636,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             renderROI(roiData);
                             prefillRoiSettingsInputs();
                         }
-                        await renderActiveIndicator(dashboardData);
                         renderLeadJourney(dashboardData);
-                        renderLeads(dashboardData.recentLeads || []);
+                        renderLeads(dashboardData.recentLeads || [], { preserveFilter: true });
                         renderAppointments(dashboardData.appointments || []);
                         const callsToRender = dashboardData.recentCalls || [];
                         renderCalls(callsToRender);
                         renderTomAbTestSection(dashboardData);
-                        await renderCallRecordings(callsToRender);
-
-                        // Non-critical panels: parallelize to reduce main-thread blocking.
-                        // Also avoid repainting the follow-up/retry queue while modals are open.
-                        const modalsOpen = !!document.querySelector('.modal-backdrop.open');
-                        const tasks = [
-                            renderCallQuality(dashboardData),
-                            renderCallInsights(dashboardData),
-                            modalsOpen ? Promise.resolve() : renderRetryQueue(dashboardData),
-                            renderDailySummary(),
-                            renderOpsHealth(),
-                            renderCalendarDetails(dashboardData),
-                            refreshOutboundSequenceWindow(currentClient)
-                        ];
-                        await Promise.allSettled(tasks);
-
                         renderChart(config, dashboardData);
                         syncDashboardFreshnessUi();
+                        updateLeadsBriefSyncHintUi();
                     } else if (currentClient !== DEMO_CLIENT_KEY) {
                         dashboardLivePayloadFailed = true;
                         setDashboardApiErrorVisible(true, lastDashboardFetchError);
