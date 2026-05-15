@@ -12,7 +12,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
             --primary: #5c6ac4;
@@ -10590,6 +10589,321 @@ ${actionsRow}
         let lastDashboardFetchError = '';
         /** Outreach brief first paint: full lead list still loading in background. */
         let outreachBriefListPending = false;
+        const DASHBOARD_DEFER_SECONDARY_LOADS = globalThis.__dashboardDeferSecondaryLoads !== false;
+        const DASHBOARD_DEFERRED_LOAD_DELAY_MS = 2500;
+        const DASHBOARD_FULL_HYDRATE_IDLE_MS = 10000;
+        const DASHBOARD_LEAD_RENDER_INITIAL = 80;
+        const DASHBOARD_LEAD_RENDER_BATCH = 100;
+        let dashboardDeferredLoadsRan = false;
+        let outreachFullHydrateInFlight = false;
+        let outreachFullHydrateIdleScheduled = false;
+        let followUpQueueNeedsEnrichment = false;
+        let leadListPaintGeneration = 0;
+        let leadsListScrollObserver = null;
+        let xlsxLoadPromise = null;
+
+        function dashboardDeferEnabled() {
+            return DASHBOARD_DEFER_SECONDARY_LOADS;
+        }
+
+        function scheduleOnDashboardIdle(fn, { timeoutMs = DASHBOARD_DEFERRED_LOAD_DELAY_MS } = {}) {
+            const run = () => {
+                try {
+                    fn();
+                } catch (e) {
+                    console.warn('[DASHBOARD] idle task failed', e);
+                }
+            };
+            if (typeof requestIdleCallback === 'function') {
+                requestIdleCallback(run, { timeout: timeoutMs });
+            } else {
+                setTimeout(run, timeoutMs);
+            }
+        }
+
+        function dashboardMetricsFingerprint(d) {
+            if (!d || typeof d !== 'object') return '';
+            const oc = d.outreachCapacity;
+            const ocSig = oc
+                ? [
+                    oc.leadsNeverDialed || 0,
+                    oc.callQueuePending || 0,
+                    oc.dialAttemptsLast24h || 0,
+                    oc.queueTouchesLast24h || 0,
+                ].join('|')
+                : '';
+            return [
+                d.totalLeads,
+                d.totalCalls,
+                d.bookingsThisWeek,
+                d.last24hLeads,
+                (d.recentCalls || []).length,
+                ocSig,
+            ].join('::');
+        }
+
+        function ensureXlsxLoaded() {
+            if (typeof XLSX !== 'undefined') return Promise.resolve();
+            if (xlsxLoadPromise) return xlsxLoadPromise;
+            xlsxLoadPromise = new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                s.async = true;
+                s.onload = () => resolve();
+                s.onerror = () => {
+                    xlsxLoadPromise = null;
+                    reject(new Error('Could not load Excel import library'));
+                };
+                document.head.appendChild(s);
+            });
+            return xlsxLoadPromise;
+        }
+
+        function updateLeadsBriefSyncHintUi() {
+            const briefHint = document.getElementById('leadsBriefSyncHint');
+            if (!briefHint) return;
+            if (
+                isOutreachDashboardClient(currentClient) &&
+                outreachBriefListPending &&
+                recentLeadsAllRows.length > 0 &&
+                !outreachFullHydrateInFlight
+            ) {
+                const listCap = dashboardData.recentLeadsListCap ?? RECENT_LEADS_DASHBOARD_CAP;
+                const loaded = recentLeadsAllRows.length;
+                briefHint.hidden = false;
+                briefHint.innerHTML = `Showing ${formatNumber(loaded)} rows (preview cap ${formatNumber(listCap)}). <button type="button" class="export-btn secondary" id="leadsLoadFullListBtn" style="font-size:0.85rem;margin-left:6px;">Load full lead list</button>`;
+                const btn = document.getElementById('leadsLoadFullListBtn');
+                if (btn && btn.dataset.bound !== '1') {
+                    btn.dataset.bound = '1';
+                    btn.addEventListener('click', () => runOutreachFullHydrate({ userInitiated: true }));
+                }
+            } else if (!outreachFullHydrateInFlight) {
+                briefHint.hidden = true;
+                briefHint.textContent = '';
+                briefHint.innerHTML = '';
+            }
+        }
+
+        async function runOutreachFullHydrate({ userInitiated = false } = {}) {
+            if (!currentClient || currentClient === DEMO_CLIENT_KEY) return false;
+            if (!outreachBriefListPending || outreachFullHydrateInFlight) return false;
+            outreachFullHydrateInFlight = true;
+            const briefHint = document.getElementById('leadsBriefSyncHint');
+            if (briefHint) {
+                briefHint.hidden = false;
+                briefHint.textContent = userInitiated
+                    ? 'Loading full CRM list…'
+                    : 'Loading full CRM list in the background…';
+                briefHint.innerHTML = briefHint.textContent;
+            }
+            try {
+                const fpBefore = dashboardMetricsFingerprint(dashboardData);
+                const full = await fetchLiveData(currentClient, { brief: false });
+                if (!full || full.ok !== true) {
+                    if (briefHint && outreachBriefListPending) {
+                        briefHint.hidden = false;
+                        briefHint.innerHTML = `Could not load full list. <button type="button" class="export-btn secondary" id="leadsLoadFullListBtn" style="font-size:0.85rem;margin-left:6px;">Retry</button>`;
+                        document.getElementById('leadsLoadFullListBtn')?.addEventListener('click', () => {
+                            runOutreachFullHydrate({ userInitiated: true });
+                        }, { once: true });
+                    }
+                    return false;
+                }
+                outreachBriefListPending = false;
+                dashboardData = mergeData(dashboardData, full, false);
+                const metricsUnchanged = fpBefore === dashboardMetricsFingerprint(dashboardData);
+                updateStatusBar(dashboardData);
+                if (!metricsUnchanged) {
+                    renderRecentActivity(dashboardData);
+                    renderLeadJourney(dashboardData);
+                    const chartCfg =
+                        currentDashboardChartConfig ||
+                        CLIENT_CONFIG[currentClient] ||
+                        CLIENT_CONFIG[DEMO_CLIENT_KEY] ||
+                        {};
+                    renderChart(chartCfg, dashboardData);
+                    renderCalls(dashboardData.recentCalls || []);
+                    renderTomAbTestSection(dashboardData);
+                }
+                loadLeadsFunnelSegmentForClient(currentClient);
+                syncLeadsFunnelChipUi();
+                renderLeads(dashboardData.recentLeads || [], { preserveFilter: true });
+                lastDashboardPollFingerprint = dashboardPollFingerprint(dashboardData);
+                syncDashboardFreshnessUi();
+                updateStatusBar(dashboardData);
+                updateLeadsBriefSyncHintUi();
+                if (userInitiated) {
+                    showToast(
+                        'Full list loaded',
+                        'Recent leads now include the full synced dataset.',
+                        'success',
+                        2600
+                    );
+                }
+                return true;
+            } catch (e) {
+                console.warn('[DASHBOARD] full outreach hydrate failed', e);
+                return false;
+            } finally {
+                outreachFullHydrateInFlight = false;
+                updateLeadsBriefSyncHintUi();
+            }
+        }
+
+        function scheduleOutreachFullHydrateIdle() {
+            if (!dashboardDeferEnabled() || !outreachBriefListPending || outreachFullHydrateIdleScheduled) return;
+            outreachFullHydrateIdleScheduled = true;
+            setTimeout(() => {
+                if (outreachBriefListPending && !outreachFullHydrateInFlight) {
+                    runOutreachFullHydrate({ userInitiated: false });
+                }
+            }, DASHBOARD_FULL_HYDRATE_IDLE_MS);
+        }
+
+        function initLeadsListFullHydrateObserver() {
+            const listEl = document.getElementById('leads-list');
+            if (!listEl || leadsListScrollObserver || typeof IntersectionObserver !== 'function') return;
+            leadsListScrollObserver = new IntersectionObserver((entries) => {
+                for (const entry of entries) {
+                    if (entry.isIntersecting && outreachBriefListPending) {
+                        runOutreachFullHydrate({ userInitiated: false });
+                        leadsListScrollObserver.disconnect();
+                        leadsListScrollObserver = null;
+                        break;
+                    }
+                }
+            }, { root: null, rootMargin: '0px', threshold: 0.05 });
+            leadsListScrollObserver.observe(listEl);
+        }
+
+        async function enrichFollowUpQueueHandoffAndStats(clientKey) {
+            const hint = document.getElementById('followUpQueueHint');
+            const myGen = followUpQueueLoadGen;
+            let rows = Array.isArray(followUpQueueState?.rawRows) ? followUpQueueState.rawRows.slice() : [];
+            if (!rows.length) return;
+            try {
+                const normalizeDigits = (p) => String(p || '').replace(/\D+/g, '');
+                const last10 = (p) => {
+                    const d = normalizeDigits(p);
+                    return d.length >= 10 ? d.slice(-10) : d;
+                };
+                const phones = [];
+                rows.forEach((r) => {
+                    const p1 = String(r?.['Called Number'] || '').trim();
+                    const p2 = String(r?.Phone || '').trim();
+                    if (p1) phones.push(p1);
+                    if (p2) phones.push(p2);
+                    if (p1) phones.push(last10(p1));
+                    if (p2) phones.push(last10(p2));
+                });
+                const uniquePhones = Array.from(new Set(phones.map((p) => String(p || '').trim()).filter(Boolean))).slice(0, 250);
+                if (uniquePhones.length) {
+                    const handoffRes = await fetch(`${BASE_URL}/api/handoff/${encodeURIComponent(clientKey)}/batch`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phones: uniquePhones }),
+                    });
+                    const handoff = await handoffRes.json().catch(() => ({}));
+                    if (handoffRes.ok && handoff && handoff.ok && handoff.items) {
+                        rows = rows.map((r) => {
+                            const called = String(r?.['Called Number'] || '').trim();
+                            const phone = String(r?.Phone || '').trim();
+                            const keys = [called, phone, last10(called), last10(phone)]
+                                .map((x) => String(x || '').trim())
+                                .filter(Boolean);
+                            const item = keys.map((k) => handoff.items[k]).find(Boolean) || null;
+                            return item ? { ...r, _handoff: item } : r;
+                        });
+                        if (myGen === followUpQueueLoadGen) {
+                            followUpQueueState.rawRows = rows;
+                            const wrap = document.getElementById('follow-up-queue');
+                            if (wrap) followUpPaintTable(wrap);
+                        }
+                    }
+                }
+            } catch {
+                /* best-effort */
+            }
+            try {
+                const payload = await fetch(
+                    `${BASE_URL}/api/follow-up-queue/${encodeURIComponent(clientKey)}/stats`,
+                    { cache: 'no-store' }
+                ).then((r) => r.json());
+                if (myGen !== followUpQueueLoadGen || !payload || payload.ok === false) return;
+                followUpStats = payload.stats || null;
+                if (!hint || !followUpStats) return;
+                const s = followUpStats;
+                const today = s.today || {};
+                const extra = [
+                    `Queue: ${formatNumber(s.todo || 0)} to call`,
+                    `${formatNumber(s.called || 0)} called`,
+                    `${formatNumber(s.quoted || 0)} quoted`,
+                    `Today: ${formatNumber((today.called || 0) + (today.quoted || 0))} outcomes / ${formatNumber(today.total || 0)} new`,
+                ];
+                hint.textContent = `${hint.textContent} · ${extra.join(' · ')}`;
+                hint.hidden = false;
+            } catch {
+                /* best-effort */
+            }
+            followUpQueueNeedsEnrichment = false;
+        }
+
+        async function runDashboardTierNowLoads({ config, callsToRender }) {
+            const outreach = isOutreachDashboardClient(currentClient);
+            const tasks = [
+                renderActiveIndicator(dashboardData).catch((err) => console.warn('Active indicator failed', err)),
+                renderCallQuality(dashboardData).catch((err) => console.warn('Call quality failed', err)),
+                refreshOutboundSequenceWindow(currentClient).catch((err) => console.warn('Outbound sequence window failed', err)),
+                loadFollowUpQueue(currentClient, { deferEnrichment: dashboardDeferEnabled() }).catch((err) => console.warn('Follow-up list failed', err)),
+            ];
+            if (!outreach) {
+                tasks.push(renderRetryQueue(dashboardData).catch((err) => console.warn('Retry queue failed', err)));
+            }
+            await Promise.all(tasks);
+        }
+
+        async function runDashboardDeferredLoads({ config, callsToRender }) {
+            if (dashboardDeferredLoadsRan) return;
+            dashboardDeferredLoadsRan = true;
+            const outreach = isOutreachDashboardClient(currentClient);
+            const tasks = [];
+            if (!outreach) {
+                tasks.push(
+                    renderSystemStatus(config).catch((err) => console.warn('System status failed', err)),
+                    loadIntegrationHealth(currentClient).catch((err) => console.warn('Integration health failed', err)),
+                    renderCalendarDetails(dashboardData).catch((err) => console.warn('Calendar details failed', err)),
+                    renderCallRecordings(callsToRender).catch((err) => console.warn('Call recordings failed', err)),
+                    renderVoicemailListener().catch((err) => console.warn('Voicemail listener failed', err))
+                );
+            }
+            tasks.push(
+                renderCallInsights(dashboardData).catch((err) => console.warn('Call insights failed', err)),
+                renderDailySummary().catch((err) => console.warn('Daily summary failed', err)),
+                renderOpsHealth().catch((err) => console.warn('Ops health failed', err)),
+                (async () => {
+                    initDncUi();
+                    await renderDncList();
+                })().catch((err) => console.warn('DNC list failed', err))
+            );
+            if (followUpQueueNeedsEnrichment) {
+                tasks.push(
+                    enrichFollowUpQueueHandoffAndStats(currentClient).catch((err) =>
+                        console.warn('Follow-up enrichment failed', err)
+                    )
+                );
+            }
+            await Promise.all(tasks);
+        }
+
+        function scheduleDashboardDeferredLoads(ctx) {
+            if (!dashboardDeferEnabled()) {
+                runDashboardDeferredLoads(ctx).catch((e) => console.warn('[DASHBOARD] deferred loads failed', e));
+                return;
+            }
+            scheduleOnDashboardIdle(() => {
+                runDashboardDeferredLoads(ctx).catch((e) => console.warn('[DASHBOARD] deferred loads failed', e));
+            });
+        }
 
         function setDashboardApiErrorVisible(show, detailText = '') {
             const el = document.getElementById('dashboardApiErrorBanner');
@@ -12054,21 +12368,7 @@ ${actionsRow}
             const filterQ = (searchEl && searchEl.value) ? searchEl.value.trim().toLowerCase() : '';
             const listCap = dashboardData.recentLeadsListCap ?? RECENT_LEADS_DASHBOARD_CAP;
             const isDemo = currentClient === DEMO_CLIENT_KEY;
-            const briefHint = document.getElementById('leadsBriefSyncHint');
-            if (briefHint) {
-                if (
-                    isOutreachDashboardClient(currentClient) &&
-                    outreachBriefListPending &&
-                    recentLeadsAllRows.length > 0
-                ) {
-                    briefHint.hidden = false;
-                    const loaded = recentLeadsAllRows.length;
-                    briefHint.textContent = `Showing ${formatNumber(loaded)} rows (initial cap ${formatNumber(listCap)}). Full CRM list loads in the background…`;
-                } else {
-                    briefHint.hidden = true;
-                    briefHint.textContent = '';
-                }
-            }
+            updateLeadsBriefSyncHintUi();
 
             if (!recentLeadsAllRows.length) {
                 container.innerHTML = `
@@ -12081,10 +12381,6 @@ ${actionsRow}
                 if (hintEl) {
                     hintEl.textContent = '';
                     hintEl.hidden = true;
-                }
-                if (briefHint) {
-                    briefHint.hidden = true;
-                    briefHint.textContent = '';
                 }
                 currentLeads = [];
                 return;
@@ -12144,16 +12440,36 @@ ${actionsRow}
                     </div>
                 `;
             } else {
-                container.innerHTML =
-                    barHtml +
-                    entries
+                const paintGen = ++leadListPaintGeneration;
+                const buildChunkHtml = (slice) =>
+                    slice
                         .map(({ lead, fullIndex }) =>
                             buildLeadItemHtml(lead, fullIndex, outreachDupHints ? outreachDupHints.get(fullIndex) : null)
                         )
                         .join('');
+                const useChunkedPaint = entries.length > DASHBOARD_LEAD_RENDER_INITIAL + 20;
+                if (!useChunkedPaint) {
+                    container.innerHTML = barHtml + buildChunkHtml(entries);
+                    currentLeads = recentLeadsAllRows;
+                    attachLeadModalEvents();
+                } else {
+                    const initial = entries.slice(0, DASHBOARD_LEAD_RENDER_INITIAL);
+                    container.innerHTML = barHtml + buildChunkHtml(initial);
+                    currentLeads = recentLeadsAllRows;
+                    attachLeadModalEvents();
+                    let offset = DASHBOARD_LEAD_RENDER_INITIAL;
+                    const paintMore = () => {
+                        if (paintGen !== leadListPaintGeneration) return;
+                        if (offset >= entries.length) return;
+                        const batch = entries.slice(offset, offset + DASHBOARD_LEAD_RENDER_BATCH);
+                        offset += DASHBOARD_LEAD_RENDER_BATCH;
+                        container.insertAdjacentHTML('beforeend', buildChunkHtml(batch));
+                        attachLeadModalEvents();
+                        if (offset < entries.length) requestAnimationFrame(paintMore);
+                    };
+                    requestAnimationFrame(paintMore);
+                }
             }
-            currentLeads = recentLeadsAllRows;
-            attachLeadModalEvents();
         }
 
         function renderLeads(leads, opts = {}) {
@@ -17169,7 +17485,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
 
-        async function loadFollowUpQueue(clientKey, { page = followUpQueuePage, silent = false } = {}) {
+        async function loadFollowUpQueue(clientKey, { page = followUpQueuePage, silent = false, deferEnrichment = false } = {}) {
             const wrap = document.getElementById('follow-up-queue');
             const hint = document.getElementById('followUpQueueHint');
             if (!wrap) return;
@@ -17241,50 +17557,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
                 rows = followUpHydrateRowsForDashboard(rows, clientKey);
 
-                // Best-effort: enrich sheet rows with DB-backed handoff snapshots (if available).
-                try {
-                    const normalizeDigits = (p) => String(p || '').replace(/\D+/g, '');
-                    const last10 = (p) => {
-                        const d = normalizeDigits(p);
-                        return d.length >= 10 ? d.slice(-10) : d;
-                    };
-
-                    const phones = [];
-                    rows.forEach((r) => {
-                        const p1 = String(r?.['Called Number'] || '').trim();
-                        const p2 = String(r?.Phone || '').trim();
-                        if (p1) phones.push(p1);
-                        if (p2) phones.push(p2);
-                        // Also include match keys (server will echo these too if it finds a row).
-                        if (p1) phones.push(last10(p1));
-                        if (p2) phones.push(last10(p2));
-                    });
-
-                    const uniquePhones = Array.from(new Set(phones.map((p) => String(p || '').trim()).filter(Boolean))).slice(0, 250);
-                    if (uniquePhones.length) {
-                        const handoffRes = await fetch(`${BASE_URL}/api/handoff/${encodeURIComponent(clientKey)}/batch`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ phones: uniquePhones })
-                        });
-                        const handoff = await handoffRes.json().catch(() => ({}));
-                        if (handoffRes.ok && handoff && handoff.ok && handoff.items) {
-                            rows = rows.map((r) => {
-                                const called = String(r?.['Called Number'] || '').trim();
-                                const phone = String(r?.Phone || '').trim();
-                                const keys = [
-                                    called,
-                                    phone,
-                                    last10(called),
-                                    last10(phone),
-                                ].map((x) => String(x || '').trim()).filter(Boolean);
-                                const item = keys.map((k) => handoff.items[k]).find(Boolean) || null;
-                                return item ? { ...r, _handoff: item } : r;
-                            });
-                        }
-                    }
-                } catch (e) {
-                    // ignore: older deployments or missing table should not break the dashboard
+                if (deferEnrichment) {
+                    followUpQueueNeedsEnrichment = true;
                 }
 
                 const colsRaw = followUpVisibleColumns(rows);
@@ -17332,27 +17606,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     hint.hidden = false;
                 }
                 followUpUpdatePagerUi();
-
-                // V1: show full-queue throughput stats (not just current page)
-                fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(clientKey)}/stats`, { cache: 'no-store' })
-                    .then((r) => r.json())
-                    .then((payload) => {
-                        if (myGen !== followUpQueueLoadGen) return;
-                        if (!payload || payload.ok === false) return;
-                        followUpStats = payload.stats || null;
-                        if (!hint || !followUpStats) return;
-                        const s = followUpStats;
-                        const today = s.today || {};
-                        const extra = [
-                            `Queue: ${formatNumber(s.todo || 0)} to call`,
-                            `${formatNumber(s.called || 0)} called`,
-                            `${formatNumber(s.quoted || 0)} quoted`,
-                            `Today: ${formatNumber((today.called || 0) + (today.quoted || 0))} outcomes / ${formatNumber(today.total || 0)} new`
-                        ];
-                        hint.textContent = `${hint.textContent} · ${extra.join(' · ')}`;
-                        hint.hidden = false;
-                    })
-                    .catch(() => {});
+                if (!deferEnrichment) {
+                    await enrichFollowUpQueueHandoffAndStats(clientKey);
+                }
             } catch (e) {
                 if (myGen !== followUpQueueLoadGen) return;
                 console.warn('follow-up queue', e);
@@ -19179,37 +19435,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
 
             if (currentClient !== DEMO_CLIENT_KEY && outreachBriefHydrate) {
-                fetchLiveData(currentClient, { brief: false })
-                    .then((full) => {
-                        if (!full || full.ok !== true) return;
-                        outreachBriefListPending = false;
-                        dashboardData = mergeData(dashboardData, full, false);
-                        lastDashboardPollFingerprint = dashboardPollFingerprint(dashboardData);
-                        updateStatusBar(dashboardData);
-                        renderRecentActivity(dashboardData);
-                        renderLeadJourney(dashboardData);
-                        loadLeadsFunnelSegmentForClient(currentClient);
-                        syncLeadsFunnelChipUi();
-                        renderLeads(dashboardData.recentLeads || [], { preserveFilter: true });
-                        const chartCfg =
-                            currentDashboardChartConfig ||
-                            CLIENT_CONFIG[currentClient] ||
-                            CLIENT_CONFIG[DEMO_CLIENT_KEY] ||
-                            {};
-                        renderChart(chartCfg, dashboardData);
-                        const callsToRender = dashboardData.recentCalls || [];
-                        renderCalls(callsToRender);
-                        renderTomAbTestSection(dashboardData);
-                        syncDashboardFreshnessUi();
-                        updateStatusBar(dashboardData);
-                        showToast(
-                            'Full list loaded',
-                            'Recent leads and calls now include the full synced dataset.',
-                            'success',
-                            2600
-                        );
-                    })
-                    .catch((e) => console.warn('[DASHBOARD] full outreach hydrate failed', e));
+                if (!dashboardDeferEnabled()) {
+                    runOutreachFullHydrate({ userInitiated: false });
+                } else {
+                    updateLeadsBriefSyncHintUi();
+                    initLeadsListFullHydrateObserver();
+                    scheduleOutreachFullHydrateIdle();
+                }
             }
 
             syncDashboardFreshnessUi();
@@ -19240,27 +19472,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             );
             lastDashboardPollFingerprint = dashboardPollFingerprint(dashboardData);
             
-            // Load async data in parallel (non-blocking)
-            Promise.all([
-                renderActiveIndicator(dashboardData).catch(err => console.warn('Active indicator failed', err)),
-                renderSystemStatus(config).catch(err => console.warn('System status failed', err)),
-                renderCallQuality(dashboardData).catch(err => console.warn('Call quality failed', err)),
-                renderCallInsights(dashboardData).catch(err => console.warn('Call insights failed', err)),
-                renderRetryQueue(dashboardData).catch(err => console.warn('Retry queue failed', err)),
-                renderDailySummary().catch(err => console.warn('Daily summary failed', err)),
-                renderOpsHealth().catch(err => console.warn('Ops health failed', err)),
-                refreshOutboundSequenceWindow(currentClient).catch(err => console.warn('Outbound sequence window failed', err)),
-                (async () => { initDncUi(); await renderDncList(); })().catch(err => console.warn('DNC list failed', err)),
-                loadFollowUpQueue(currentClient).catch(err => console.warn('Follow-up list failed', err)),
-                renderCalendarDetails(dashboardData).catch(err => console.warn('Calendar details failed', err)),
-                renderCallRecordings(callsToRender).catch(err => console.warn('Call recordings failed', err)),
-                renderVoicemailListener().catch(err => console.warn('Voicemail listener failed', err))
-            ]).then(() => {
-                console.log('All async data loaded');
-            });
-            
-            // Load integration health (non-blocking)
-            loadIntegrationHealth(currentClient);
+            const secondaryLoadCtx = { config, callsToRender };
+            runDashboardTierNowLoads(secondaryLoadCtx)
+                .then(() => console.log('Dashboard tier-now panels loaded'))
+                .catch((e) => console.warn('[DASHBOARD] tier-now loads failed', e));
+            scheduleDashboardDeferredLoads(secondaryLoadCtx);
 
             startLiveEvents(currentClient);
 
@@ -19336,15 +19552,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         // Accessibility improvements
         function initAccessibility() {
+            const a11yRoot = document.querySelector('header')?.parentElement || document.body;
             // Add ARIA labels to interactive elements
-            document.querySelectorAll('button').forEach(btn => {
+            a11yRoot.querySelectorAll('button').forEach(btn => {
                 if (!btn.getAttribute('aria-label') && !btn.textContent.trim()) {
                     btn.setAttribute('aria-label', btn.title || 'Button');
                 }
             });
 
             // Add ARIA labels to cards
-            document.querySelectorAll('.card').forEach(card => {
+            a11yRoot.querySelectorAll('.card').forEach(card => {
                 const title = card.querySelector('h3');
                 if (title && !card.getAttribute('aria-label')) {
                     card.setAttribute('aria-label', title.textContent);
@@ -19352,7 +19569,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             });
 
             // Improve keyboard navigation
-            document.querySelectorAll('.lead-item, .appt-item, .activity-item').forEach(item => {
+            a11yRoot.querySelectorAll('.lead-item, .appt-item, .activity-item').forEach(item => {
                 if (!item.getAttribute('tabindex')) {
                     item.setAttribute('tabindex', '0');
                 }
@@ -20106,10 +20323,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const filename = String(file?.name || '').toLowerCase();
             const isExcel = filename.endsWith('.xlsx') || filename.endsWith('.xls') || filename.endsWith('.xlsm');
             const reader = new FileReader();
-            reader.onload = () => {
+            reader.onload = async () => {
                 let parsed = null;
                 try {
                     if (isExcel) {
+                        await ensureXlsxLoaded();
                         parsed = parseExcel(reader.result);
                     } else {
                         parsed = parseCsv(reader.result);
