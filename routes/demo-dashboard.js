@@ -6,6 +6,14 @@
  * GET /api/demo-dashboard/:clientKey
  */
 import { Router } from 'express';
+import {
+  computeDemoDashboardEtag,
+  demoDashboardCacheKey,
+  getCachedDemoDashboard,
+  getDemoDashboardCacheTtlMs,
+  respondDemoDashboard,
+  setCachedDemoDashboard
+} from '../lib/demo-dashboard-response-cache.js';
 import { sqlDaysAgo as sqlDaysAgoLib } from '../lib/sql-relative-interval.js';
 
 /**
@@ -177,6 +185,22 @@ export async function handleDemoDashboard(req, res, deps) {
     END)`;
 
   try {
+    const bustDashboardCache =
+      req.query.t != null && String(req.query.t || '').trim() !== '';
+    const dashboardCacheTtlMs = getDemoDashboardCacheTtlMs();
+    const dashboardCacheKey = demoDashboardCacheKey(clientKey, briefRequested);
+
+    if (!bustDashboardCache && dashboardCacheTtlMs > 0) {
+      const cached = getCachedDemoDashboard(dashboardCacheKey);
+      if (cached) {
+        const inm = String(req.headers['if-none-match'] || '').trim();
+        if (inm && inm === cached.etag) {
+          return respondDemoDashboard(res, { etag: cached.etag, status: 304, cacheHeader: 'hit' });
+        }
+        return respondDemoDashboard(res, { etag: cached.etag, body: cached.body, cacheHeader: 'hit' });
+      }
+    }
+
     let client = await getFullClient(clientKey, { bypassCache: false });
     const activityChannel = activityFeedChannelLabel(client);
     const tenantTz = client?.booking?.timezone || client?.timezone || 'Europe/London';
@@ -2134,8 +2158,15 @@ export async function handleDemoDashboard(req, res, deps) {
       usageMeters,
       dashboardExperience
     };
-    res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
-    return res.json(payload);
+    const etag = computeDemoDashboardEtag(payload);
+    if (!bustDashboardCache && dashboardCacheTtlMs > 0) {
+      setCachedDemoDashboard(dashboardCacheKey, etag, payload, dashboardCacheTtlMs);
+    }
+    const inm = String(req.headers['if-none-match'] || '').trim();
+    if (inm && inm === etag) {
+      return respondDemoDashboard(res, { etag, status: 304, cacheHeader: 'revalidated' });
+    }
+    return respondDemoDashboard(res, { etag, body: payload, cacheHeader: 'miss' });
   } catch (error) {
     console.error('[DEMO DASHBOARD ERROR]', error);
     await sendOperatorAlert?.({

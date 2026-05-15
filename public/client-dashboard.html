@@ -11134,9 +11134,43 @@ ${actionsRow}
         }
 
         let lastDataUpdate = new Date();
+        let lastDashboardEtag = '';
+        const DASHBOARD_POLL_BASE_MS = 60000;
+        const DASHBOARD_POLL_IDLE_2M_MS = 120000;
+        const DASHBOARD_POLL_IDLE_5M_MS = 180000;
+        let lastDashboardUserActivityAt = Date.now();
+        let dashboardPollTimerId = null;
+
+        function bumpDashboardUserActivity() {
+            lastDashboardUserActivityAt = Date.now();
+        }
+
+        function initDashboardUserActivityTracking() {
+            let throttle = null;
+            const onActivity = () => {
+                if (throttle) return;
+                throttle = setTimeout(() => {
+                    throttle = null;
+                    bumpDashboardUserActivity();
+                }, 2000);
+                bumpDashboardUserActivity();
+            };
+            ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach((evt) => {
+                document.addEventListener(evt, onActivity, { passive: true });
+            });
+        }
+
+        function dashboardPollDelayMs() {
+            const idleMs = Date.now() - lastDashboardUserActivityAt;
+            if (idleMs >= 5 * 60 * 1000) return DASHBOARD_POLL_IDLE_5M_MS;
+            if (idleMs >= 2 * 60 * 1000) return DASHBOARD_POLL_IDLE_2M_MS;
+            return DASHBOARD_POLL_BASE_MS;
+        }
+
         async function fetchLiveData(clientKey, options = {}) {
             const bustCache = options && options.bustCache === true;
             const brief = options && options.brief === true;
+            const useEtag = options && options.useEtag === true;
             if (clientKey !== DEMO_CLIENT_KEY) {
                 try {
                     // Add timeout to prevent hanging
@@ -11146,13 +11180,25 @@ ${actionsRow}
                     if (bustCache) params.set('t', String(Date.now()));
                     if (brief) params.set('brief', '1');
                     const q = params.toString() ? `?${params.toString()}` : '';
+                    const headers = {};
+                    if (useEtag && !bustCache && lastDashboardEtag) {
+                        headers['If-None-Match'] = lastDashboardEtag;
+                    }
                     const res = await fetch(
                         `${BASE_URL}/api/demo-dashboard/${encodeURIComponent(clientKey)}${q}`,
-                        { signal: controller.signal }
+                        { signal: controller.signal, headers }
                     );
                     clearTimeout(timeoutId);
+
+                    if (res.status === 304) {
+                        lastDashboardFetchError = '';
+                        lastDataUpdate = new Date();
+                        return { ok: true, notModified: true };
+                    }
                     
                     if (res.ok) {
+                        const etag = res.headers.get('etag');
+                        if (etag) lastDashboardEtag = etag;
                         const payload = await res.json();
                         if (payload && payload.ok) {
                             lastDashboardFetchError = '';
@@ -19606,16 +19652,25 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 });
             }, 100);
 
-            const dashboardPollMs = 60000;
-            setInterval(async () => {
-                if (document.visibilityState === 'hidden') return;
-                if (dashboardPollInFlight) return;
-                dashboardPollInFlight = true;
-                try {
-                    const pollBrief = outreachBriefListPending && isOutreachDashboardClient(currentClient);
-                    const refreshPayload = await fetchLiveData(currentClient, { brief: pollBrief });
-                    lastDataUpdate = new Date();
-                    if (refreshPayload) {
+            initDashboardUserActivityTracking();
+
+            function scheduleDashboardPoll() {
+                if (dashboardPollTimerId) clearTimeout(dashboardPollTimerId);
+                dashboardPollTimerId = setTimeout(async () => {
+                    dashboardPollTimerId = null;
+                    scheduleDashboardPoll();
+                    if (document.visibilityState === 'hidden') return;
+                    if (dashboardPollInFlight) return;
+                    dashboardPollInFlight = true;
+                    try {
+                        const pollBrief = outreachBriefListPending && isOutreachDashboardClient(currentClient);
+                        const refreshPayload = await fetchLiveData(currentClient, {
+                            brief: pollBrief,
+                            useEtag: true
+                        });
+                        lastDataUpdate = new Date();
+                        if (refreshPayload && refreshPayload.notModified) return;
+                        if (refreshPayload) {
                         dashboardLivePayloadFailed = false;
                         lastDashboardFetchError = '';
                         setDashboardApiErrorVisible(false, '');
@@ -19652,10 +19707,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     }
                 } catch (error) {
                     console.error('Failed to refresh dashboard data', error);
-                } finally {
-                    dashboardPollInFlight = false;
+                    } finally {
+                        dashboardPollInFlight = false;
+                    }
+                }, dashboardPollDelayMs());
+            }
+            scheduleDashboardPoll();
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && !dashboardPollTimerId) {
+                    scheduleDashboardPoll();
                 }
-            }, dashboardPollMs);
+            });
         }
 
         // Accessibility improvements

@@ -716,5 +716,117 @@ describe('routes/demo-dashboard', () => {
     const res = await request(app).get('/api/demo-dashboard/c1').expect(500);
     expect(res.body).toEqual(expect.objectContaining({ ok: false }));
   });
+
+  test('cache: second request within TTL skips query; If-None-Match returns 304', async () => {
+    await withIsolatedModulesAndEnv(jest, { DEMO_DASHBOARD_CACHE_MS: '60000' }, async () => {
+      jest.unstable_mockModule('../../db.js', () => ({
+        inferOutboundAbExperimentName: jest.fn(async () => null),
+        getOutboundAbExperimentSummary: jest.fn(async () => null)
+      }));
+      jest.unstable_mockModule('../../lib/outbound-ab-baseline.js', () => ({
+        getVapiAssistantCreativeSnapshot: jest.fn(async () => ({
+          voiceId: 'v1',
+          firstMessage: 'hi',
+          script: 's',
+          fetchFailedReason: null
+        }))
+      }));
+      jest.unstable_mockModule('../../lib/outbound-ab-dashboard-enrich.js', () => ({
+        enrichOutboundAbDashboardSummariesFromAssistant: jest.fn(async () => {})
+      }));
+      jest.unstable_mockModule('../../lib/outbound-ab-focus.js', () => ({
+        resolveOutboundAbDimensionsForDial: jest.fn(() => []),
+        outboundAbDialWarning: jest.fn(() => null)
+      }));
+      jest.unstable_mockModule('../../lib/outbound-ab-live-results.js', () => ({
+        buildOutboundAbLiveResultsPayload: jest.fn(() => ({
+          serverTime: new Date().toISOString(),
+          minSamplesPerVariant: 50,
+          notifyEmailConfigured: false,
+          focusExperiment: null,
+          reason: 'ok'
+        }))
+      }));
+      jest.unstable_mockModule('../../lib/outbound-ab-review-lock.js', () => ({
+        isOutboundAbReviewPending: jest.fn(() => false)
+      }));
+
+      const { clearDemoDashboardResponseCache } = await import('../../lib/demo-dashboard-response-cache.js');
+      clearDemoDashboardResponseCache();
+
+      const { createDemoDashboardRouter, handleDemoDashboard } = await import('../../routes/demo-dashboard.js');
+
+      const resultsQueue = [
+        { rows: [{ total: 0, last24: 0 }] },
+        { rows: [{ total: 0, unique_leads_called: 0, last24: 0, unique_leads_called_last24: 0, booked: 0, answered: 0, not_answered: 0, outcome_pending: 0, reached_leads: 0, no_pickup_only_leads: 0, pending_only_leads: 0, unique_reached_last24: 0, unique_no_pickup_last24: 0 }] },
+        { rows: [] },
+        { rows: [{ total: 0, no_shows: 0, cancellations: 0 }] },
+        { rows: [] },
+        { rows: [] },
+        { rows: [] },
+        { rows: [] },
+        { rows: [] },
+        { rows: [] },
+        { rows: [{ n: 0 }] },
+        { rows: [{ callable_leads_today: 0, blocked_daily_limit_today: 0 }] },
+        { rows: [{ last_dial_attempt_at: null, attempts_7d: 0, attempts_30d: 0, unique_called_7d: 0, unique_called_30d: 0, unique_reached_7d: 0, unique_reached_30d: 0 }] },
+        { rows: [{}] },
+        { rows: [] },
+        { rows: [] }
+      ];
+
+      const query = jest.fn(async () => (resultsQueue.length ? resultsQueue.shift() : { rows: [] }));
+
+      const deps = {
+        getFullClient: jest.fn(async () => ({
+          displayName: 'Demo',
+          booking: { timezone: 'Europe/London' },
+          timezone: 'Europe/London',
+          vapi: {}
+        })),
+        activityFeedChannelLabel: jest.fn(() => 'calls'),
+        DateTime,
+        DASHBOARD_ACTIVITY_TZ: 'Europe/London',
+        isPostgres: false,
+        query,
+        sqlDaysAgo: () => 'NOW()',
+        formatTimeAgoLabel: () => '1h',
+        formatCallDuration: () => '1m',
+        truncateActivityFeedText: () => null,
+        formatVapiEndedReasonDisplay: () => null,
+        outcomeToFriendlyLabel: () => 'Completed',
+        parseCallsRowMetadata: () => ({}),
+        isCallQueueStartFailureRow: () => false,
+        mapCallStatus: () => 'ended',
+        mapStatusClass: () => 'ok',
+        trimEnvDashboard: () => '',
+        buildDashboardExperience: () => ({ ok: true }),
+        sendOperatorAlert: jest.fn(async () => {}),
+        fetchImpl: jest.fn(async () => ({ ok: false }))
+      };
+
+      const router = createDemoDashboardRouter({
+        handleDemoDashboard: (req, res) => handleDemoDashboard(req, res, deps)
+      });
+      const app = createContractApp({ mounts: [{ path: '/api', router }] });
+
+      const res1 = await request(app).get('/api/demo-dashboard/c1?brief=1').expect(200);
+      expect(res1.headers.etag).toBeTruthy();
+      expect(res1.headers['x-dashboard-cache']).toBe('miss');
+      assertNoStoreCache(res1);
+      const callsAfterFirst = query.mock.calls.length;
+
+      const res2 = await request(app).get('/api/demo-dashboard/c1?brief=1').expect(200);
+      expect(res2.headers['x-dashboard-cache']).toBe('hit');
+      expect(query.mock.calls.length).toBe(callsAfterFirst);
+
+      const res304 = await request(app)
+        .get('/api/demo-dashboard/c1?brief=1')
+        .set('If-None-Match', res1.headers.etag)
+        .expect(304);
+      expect(res304.headers['x-dashboard-cache']).toBe('hit');
+      expect(query.mock.calls.length).toBe(callsAfterFirst);
+    });
+  });
 });
 
