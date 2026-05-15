@@ -8672,24 +8672,44 @@
             }
         }
 
-        function renderOutboundSequenceSummary(summary) {
+        function renderOutboundSequenceSummary(summary, { listFilter = 'all', filteredRowCount = null } = {}) {
             const host = document.getElementById('outboundSequenceSummary');
             if (!host) return;
             const s = summary && typeof summary === 'object' ? summary : {};
+            const filter = String(listFilter || 'all').trim().toLowerCase();
+            const filterLabel = dashboardCohortFilterLabel(filter);
+            const activeCount = Number(s.activeSequences ?? 0);
             const fact = (label, value, hint = '') => `
                 <dl class="outreach-strip-fact">
                     <dt>${escapeHtml(label)}</dt>
                     <dd title="${escapeHtml(hint)}">${escapeHtml(String(value ?? '—'))}</dd>
                 </dl>
             `;
-            host.innerHTML = [
-                fact('Active sequences', formatNumber(s.activeSequences ?? 0), 'lead_sequence_state rows with status=active'),
-                fact('Completed today', formatNumber(s.completedToday ?? 0), 'lead_sequence_state rows completed today'),
-                fact('Stopped today', formatNumber(s.stoppedToday ?? 0), 'sequence rows explicitly stopped by an operator'),
-                fact('Abandoned by system', formatNumber(s.abandonedToday ?? 0), 'sequence rows abandoned automatically due to caps, duration, or stage limits'),
-                fact('Next-stage queued', formatNumber(s.nextStageQueued ?? 0), "pending/processing call_queue rows where triggerType='sequence_next'"),
-                fact('Oldest active update', s.oldestActiveUpdatedAt ? formatRelativeWithAbsolute(s.oldestActiveUpdatedAt, getOperationalTimezone(dashboardData)) : '—', 'helps spot stuck sequences'),
-            ].join('');
+            const filterNote =
+                filter !== 'all'
+                    ? `<div class="tom-ab-test-meta" style="margin:0 0 10px 0;grid-column:1/-1;">Tenant-wide counts below · list filter: <strong>${escapeHtml(filterLabel)}</strong>${filteredRowCount != null ? ` · ${formatNumber(filteredRowCount)} row(s) in list` : ''}</div>`
+                    : '';
+            const oldestLabel =
+                filter !== 'all' && activeCount === 0 ? 'Oldest active update (tenant)' : 'Oldest active update';
+            const oldestValue = s.oldestActiveUpdatedAt
+                ? formatRelativeWithAbsolute(s.oldestActiveUpdatedAt, getOperationalTimezone(dashboardData))
+                : filter !== 'all' && activeCount === 0
+                    ? 'None active'
+                    : '—';
+            const oldestHint =
+                filter !== 'all' && activeCount === 0
+                    ? 'No active sequences tenant-wide; the filtered list may still show stopped or abandoned rows.'
+                    : 'helps spot stuck sequences';
+            host.innerHTML =
+                filterNote
+                + [
+                    fact('Active sequences', formatNumber(s.activeSequences ?? 0), 'lead_sequence_state rows with status=active'),
+                    fact('Completed today', formatNumber(s.completedToday ?? 0), 'lead_sequence_state rows completed today'),
+                    fact('Stopped today', formatNumber(s.stoppedToday ?? 0), 'sequence rows explicitly stopped by an operator'),
+                    fact('Abandoned by system', formatNumber(s.abandonedToday ?? 0), 'sequence rows abandoned automatically due to caps, duration, or stage limits'),
+                    fact('Next-stage queued', formatNumber(s.nextStageQueued ?? 0), "pending/processing call_queue rows where triggerType='sequence_next'"),
+                    fact(oldestLabel, oldestValue, oldestHint),
+                ].join('');
         }
 
         function renderOutboundSequenceConfig(sequence, configStages = []) {
@@ -8881,6 +8901,77 @@
             return summaryText || `${statusMeta?.label || 'Sequence'} is not active.`;
         }
 
+        function outboundSequenceRecentListIntro(filter) {
+            const f = String(filter || 'all').trim().toLowerCase();
+            if (f === 'stopped') {
+                return 'Stopped by operator — review handoff context and call history. No further automated sequence dials are scheduled.';
+            }
+            if (f === 'abandoned') {
+                return 'Abandoned by system — caps or duration limits ended the sequence. Use call history and handoff notes for follow-up.';
+            }
+            if (f === 'completed') {
+                return 'Completed sequences — no further stages are queued. Open a row for captured data and call history.';
+            }
+            if (f === 'classic' || f === 'sequence') {
+                return `Showing ${dashboardCohortFilterLabel(f)} cohort. Click a row to inspect captured data and sequence status.`;
+            }
+            return 'Click a row to inspect the lead, review captured data, and stop future sequence dials if needed.';
+        }
+
+        function outboundSequenceRecentRowNextAction(row, handoff, tz) {
+            const terminal = outboundSequenceTerminalState(row, handoff || {});
+            const updated = row?.updatedAt ? formatRelativeWithAbsolute(row.updatedAt, tz) : null;
+            if (terminal.terminal) {
+                if (terminal.kind === 'stopped') {
+                    return updated
+                        ? `Stopped by operator · updated ${updated}`
+                        : 'Stopped by operator — no further sequence dials scheduled';
+                }
+                if (terminal.kind === 'abandoned') {
+                    return updated
+                        ? `Abandoned by system · updated ${updated}`
+                        : 'Abandoned by system — no next stage queued';
+                }
+                if (terminal.kind === 'completed') {
+                    return 'Sequence completed — no further stages queued';
+                }
+                if (terminal.kind === 'dismissed') {
+                    return 'Dismissed after operator review — sequence inactive';
+                }
+                return 'Sequence inactive — no future stage queued';
+            }
+            if (row?.nextStageScheduledFor) {
+                return `Next stage due ${formatRelativeWithAbsolute(row.nextStageScheduledFor, tz)}`;
+            }
+            if (String(row?.status || '').trim().toLowerCase() === 'active') {
+                return 'Active, but no future stage is queued right now';
+            }
+            return 'No future stage queued';
+        }
+
+        function outboundSequenceRecentRowAttemptsLabel(row, terminal) {
+            const inStage = Number(row?.attemptsInStage ?? 0);
+            const total = Number(row?.attemptsTotal ?? 0);
+            if (terminal?.terminal && total === 0 && inStage === 0) {
+                return 'No sequence dial attempts recorded';
+            }
+            return `${formatNumber(inStage)} in stage · ${formatNumber(total)} total`;
+        }
+
+        function followUpCallHistoryEmptyMessage(sequenceTerminalKind) {
+            const k = String(sequenceTerminalKind || '').trim().toLowerCase();
+            if (k === 'stopped') {
+                return 'No calls are linked to this phone in call history. The operator may have stopped the sequence before a dial, or calls may be stored under a different number format.';
+            }
+            if (k === 'abandoned') {
+                return 'No calls matched this phone. The sequence may have been abandoned by caps without a recorded dial, or calls may use a different number format.';
+            }
+            if (k === 'completed') {
+                return 'No calls found for this phone in call history yet.';
+            }
+            return 'No calls found for this phone in call history yet.';
+        }
+
         function outboundSequenceLeadTitle(row) {
             const lead = row?.lead && typeof row.lead === 'object' ? row.lead : {};
             return String(lead.name || row?.leadPhone || 'Lead').trim() || 'Lead';
@@ -8934,9 +9025,13 @@
                 (dj != null && (typeof dj === 'object' || (typeof dj === 'string' && String(dj).trim())))
                     ? { _handoff: { dataJson: dj } }
                     : null;
+            const row = detailPayload?.row && typeof detailPayload.row === 'object' ? detailPayload.row : null;
+            const handoff = detailPayload?.handoff && typeof detailPayload.handoff === 'object' ? detailPayload.handoff : {};
+            const terminal = row ? outboundSequenceTerminalState(row, handoff) : { terminal: false, kind: null };
             await followUpRenderCallHistoryInto(host, currentClient, phoneNorm, {
                 businessName: title || phoneNorm,
                 row: syntheticRow,
+                sequenceTerminalKind: terminal.kind || '',
             });
         }
 
@@ -9023,7 +9118,7 @@
             }
             const tz = getOperationalTimezone(dashboardData);
             host.innerHTML = `
-                <div class="tom-ab-test-meta" style="margin:0 0 10px 0;">Click a row to inspect the lead, review captured data, and stop future sequence dials if needed.</div>
+                <div class="tom-ab-test-meta" style="margin:0 0 10px 0;">${escapeHtml(outboundSequenceRecentListIntro(dashboardCohortFilter))}</div>
                 ${list.slice(0, 120).map((r) => {
                     const phone = String(r?.leadPhone || '').trim();
                     const selNorm = outboundSequenceSelectedPhone ? followUpNormalizePhoneKey(outboundSequenceSelectedPhone) : '';
@@ -9034,9 +9129,10 @@
                     );
                     const stage = String(r?.currentStageId || '').trim() || 'No current stage';
                     const updated = r?.updatedAt ? formatRelativeWithAbsolute(r.updatedAt, tz) : '—';
-                    const attempts = `${formatNumber(r?.attemptsInStage ?? 0)} in stage · ${formatNumber(r?.attemptsTotal ?? 0)} total`;
                     const lead = r?.lead && typeof r.lead === 'object' ? r.lead : {};
                     const handoff = r?.handoff && typeof r.handoff === 'object' ? r.handoff : {};
+                    const terminal = outboundSequenceTerminalState(r, handoff);
+                    const attempts = outboundSequenceRecentRowAttemptsLabel(r, terminal);
                     const statusMeta = outboundSequenceStatusMeta(r);
                     const title = outboundSequenceLeadTitle(r);
                     const titleLine = title !== phone && phone
@@ -9045,17 +9141,16 @@
                     const metaBits = [
                         lead.service ? `Service: ${lead.service}` : '',
                         lead.source ? `Source: ${lead.source}` : '',
-                        lead.status ? `Lead status: ${lead.status}` : '',
+                        lead.status ? `Lead status: ${lead.status}${terminal.kind === 'stopped' ? ' (CRM)' : ''}` : '',
                     ].filter(Boolean);
                     const createdLine = lead.createdAt
                         ? `Lead created ${formatRelativeWithAbsolute(lead.createdAt, tz)}`
                         : 'Lead created —';
-                    const nextAction = r?.nextStageScheduledFor
-                        ? `Next stage due ${formatRelativeWithAbsolute(r.nextStageScheduledFor, tz)}`
-                        : r?.status === 'active'
-                            ? 'Active, but no future stage is queued right now'
-                            : 'No future stage queued';
-                    const summary = outboundSequenceShortText(handoff.summaryText || handoff.operatorNotes || lead.notes || '', 150);
+                    const nextAction = outboundSequenceRecentRowNextAction(r, handoff, tz);
+                    const summarySource = terminal.terminal
+                        ? (handoff.operatorNotes || lead.notes || '')
+                        : (handoff.summaryText || handoff.operatorNotes || lead.notes || '');
+                    const summary = outboundSequenceShortText(summarySource, 150);
                     const actions = outboundSequenceJourneyActionsHtml({ phone, leadId: lead.id, title });
                     return `
                         <div
@@ -9205,20 +9300,25 @@
                     ${fact('Current stage', row.currentStageId || '—')}
                     ${fact('Lead source', lead.source || '—')}
                     ${fact('Service', lead.service || '—')}
-                    ${fact('Lead status', lead.status || '—')}
+                    ${fact('Lead status', (lead.status || '—') + (terminal.kind === 'stopped' ? ' (CRM — unchanged by stop)' : ''))}
                     ${fact('Lead created', lead.createdAt ? formatRelativeWithAbsolute(lead.createdAt, tz) : '—')}
                     ${fact('Sequence started', row.startedAt ? formatRelativeWithAbsolute(row.startedAt, tz) : '—')}
                     ${fact('Last updated', row.updatedAt ? formatRelativeWithAbsolute(row.updatedAt, tz) : '—')}
                 </div>
             `;
+            const gateSummaryNorm = String(gateSummary || '').trim();
+            const handoffSummaryNorm = String(handoff.summaryText || handoff.summary_text || '').trim();
+            const showSummaryInContext = handoffSummaryNorm && (!terminal.terminal || handoffSummaryNorm !== gateSummaryNorm);
             const handoffBits = [
-                handoff.summaryText ? `<div><strong>Handoff summary</strong><div class="tom-ab-test-meta" style="margin-top:4px;line-height:1.45;">${escapeHtml(handoff.summaryText)}</div></div>` : '',
+                showSummaryInContext ? `<div><strong>Handoff summary</strong><div class="tom-ab-test-meta" style="margin-top:4px;line-height:1.45;">${escapeHtml(handoffSummaryNorm)}</div></div>` : '',
                 handoff.operatorNotes ? `<div><strong>Operator notes</strong><div class="tom-ab-test-meta" style="margin-top:4px;line-height:1.45;">${escapeHtml(handoff.operatorNotes)}</div></div>` : '',
                 lead.notes ? `<div><strong>Lead notes</strong><div class="tom-ab-test-meta" style="margin-top:4px;line-height:1.45;">${escapeHtml(lead.notes)}</div></div>` : '',
             ].filter(Boolean).join('');
             const contextBlock = handoffBits
                 ? `<div style="display:grid;gap:10px;">${handoffBits}</div>`
-                : '<div class="tom-ab-test-meta">No handoff summary, operator note, or lead note is stored for this lead yet.</div>';
+                : terminal.terminal
+                    ? '<div class="tom-ab-test-meta">Handoff summary is in Sequence status above. No separate operator note or lead note on file.</div>'
+                    : '<div class="tom-ab-test-meta">No handoff summary, operator note, or lead note is stored for this lead yet.</div>';
             const journeyActions = outboundSequenceJourneyActionsHtml({ phone: row.leadPhone || lead.phone, leadId: lead.id, title });
             host.innerHTML = `
                 <div style="display:flex;flex-direction:column;gap:12px;">
@@ -9292,8 +9392,13 @@
                     fetch(`${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/summary`, { cache: 'no-store' }).then((r) => r.json()),
                     fetch(`${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/leads?limit=120&offset=0&filter=${encodeURIComponent(dashboardCohortFilter || 'all')}`, { cache: 'no-store' }).then((r) => r.json()),
                 ]);
-                if (summaryRes?.ok) renderOutboundSequenceSummary(summaryRes.summary || {});
                 const leadRows = leadsRes?.ok ? (leadsRes.rows || []) : [];
+                if (summaryRes?.ok) {
+                    renderOutboundSequenceSummary(summaryRes.summary || {}, {
+                        listFilter: dashboardCohortFilter,
+                        filteredRowCount: leadRows.length,
+                    });
+                }
                 const requestedPhone = String(phoneLookup || '').trim();
                 if (requestedPhone) outboundSequenceSelectedPhone = requestedPhone;
                 if (leadsRes?.ok) {
@@ -15772,7 +15877,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             return changed;
         }
 
-        async function followUpRenderCallHistoryInto(host, clientKey, phoneNorm, { businessName = '', row = null } = {}) {
+        async function followUpRenderCallHistoryInto(host, clientKey, phoneNorm, { businessName = '', row = null, sequenceTerminalKind = '', emptyHint = '' } = {}) {
             if (!host) return;
             const cache = globalThis.__followUpCallsCache || (globalThis.__followUpCallsCache = {});
             const key = `${String(clientKey || '')}::${String(phoneNorm || '')}`;
@@ -15937,7 +16042,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const summary = `<div class="tom-ab-test-meta"><strong>${escapeHtml(phoneNorm)}</strong> · ${escapeHtml(String(calls.length))} call(s) · ${escapeHtml(String(snaps.length))} sequence snapshot(s) · ${escapeHtml(String(handoffStageSnaps.length))} handoff stage snapshot(s)</div>`;
 
                 if (!calls.length) {
-                    host.innerHTML = `${title}${summary}<div class="tom-ab-test-meta" style="margin-top:8px;">No calls found for this phone yet.</div>`;
+                    const emptyMsg = emptyHint || followUpCallHistoryEmptyMessage(sequenceTerminalKind);
+                    host.innerHTML = `${title}${summary}<div class="tom-ab-test-meta" style="margin-top:8px;line-height:1.45;">${escapeHtml(emptyMsg)}</div>`;
                     return;
                 }
 

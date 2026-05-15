@@ -579,11 +579,14 @@ export function createOutboundSequenceVisibilityRouter(deps) {
       });
 
       let lastOutcome = null;
+      const queuePhoneForOutcome = String(row.leadPhone || phoneRaw).trim();
+      const outcomeDigits = queuePhoneForOutcome.replace(/\D+/g, '');
+      const outcomeLast10 = outcomeDigits.length >= 10 ? outcomeDigits.slice(-10) : '';
       try {
         if (isPostgres && row.lastCallId) {
           const oRes = await query(
             `
-            SELECT outcome, status, duration, created_at AS "createdAt"
+            SELECT outcome, status, duration, created_at AS "createdAt", call_id AS "callId"
             FROM calls
             WHERE client_key = $1 AND call_id = $2
             LIMIT 1
@@ -597,6 +600,34 @@ export function createOutboundSequenceVisibilityRouter(deps) {
               status: or.status || null,
               duration: or.duration != null ? Number(or.duration) : null,
               createdAt: or.createdAt ? new Date(or.createdAt).toISOString() : null,
+              callId: or.callId || row.lastCallId || null,
+            };
+          }
+        }
+        if (isPostgres && !lastOutcome && queuePhoneForOutcome) {
+          const oRes = await query(
+            `
+            SELECT outcome, status, duration, created_at AS "createdAt", call_id AS "callId"
+            FROM calls
+            WHERE client_key = $1
+              AND (
+                lead_phone = $2
+                OR ($3 <> '' AND regexp_replace(lead_phone, '\\D', '', 'g') = $3)
+                OR ($4 <> '' AND RIGHT(regexp_replace(lead_phone, '\\D', '', 'g'), 10) = $4)
+              )
+            ORDER BY created_at DESC
+            LIMIT 1
+          `,
+            [clientKey, queuePhoneForOutcome, outcomeDigits, outcomeLast10]
+          );
+          const or = oRes?.rows?.[0] || null;
+          if (or) {
+            lastOutcome = {
+              outcome: or.outcome || null,
+              status: or.status || null,
+              duration: or.duration != null ? Number(or.duration) : null,
+              createdAt: or.createdAt ? new Date(or.createdAt).toISOString() : null,
+              callId: or.callId || null,
             };
           }
         }
