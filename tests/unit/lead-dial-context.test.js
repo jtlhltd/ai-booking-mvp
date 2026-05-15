@@ -196,16 +196,29 @@ describe('lead-dial-context', () => {
   });
 
   test('mergeOutboundSequenceEnrollmentIntoDialContext sets canonical opt-in flag', () => {
+    const at = '2026-05-15T12:00:00.000Z';
     const enrolled = mergeOutboundSequenceEnrollmentIntoDialContext(
       { outboundSequenceOptIn: false, sequenceOptIn: true },
-      { enrolled: true }
+      { enrolled: true, actor: 'operator', at }
     );
-    expect(enrolled).toEqual({ variableValues: { outboundSequenceOptIn: true } });
+    expect(enrolled).toEqual({
+      variableValues: {
+        outboundSequenceOptIn: true,
+        sequenceEnrollmentAt: at,
+        sequenceEnrollmentBy: 'operator',
+      },
+    });
     const unenrolled = mergeOutboundSequenceEnrollmentIntoDialContext(
       { outboundSequenceOptIn: true, outboundDialMode: 'sequence' },
-      { enrolled: false }
+      { enrolled: false, actor: 'operator', at }
     );
-    expect(unenrolled).toEqual({ variableValues: { outboundSequenceOptIn: false } });
+    expect(unenrolled).toEqual({
+      variableValues: {
+        outboundSequenceOptIn: false,
+        sequenceUnenrolledAt: at,
+        sequenceUnenrolledBy: 'operator',
+      },
+    });
     expect(isLeadExplicitlyOptedIntoOutboundSequence(unenrolled)).toBe(false);
   });
 

@@ -180,6 +180,12 @@ export function mountApi(app, deps) {
       upsertLeadHandoff: deps.upsertLeadHandoff,
       query: deps.query,
       isPostgres: deps.isPostgres,
+      addToCallQueue: deps.addToCallQueue,
+      insertLeadSequenceState: deps.insertLeadSequenceState,
+      getNextBusinessHour: deps.getNextBusinessHour,
+      isBusinessHours: deps.isBusinessHours,
+      getCallTimeBanditState: deps.getCallTimeBanditState,
+      TIMEZONE: deps.TIMEZONE,
     })
   );
   app.use('/api/outreach', createOutreachRouter());

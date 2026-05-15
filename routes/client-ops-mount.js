@@ -1,5 +1,9 @@
 import { Router } from 'express';
-import { dismissSequenceSalvageForLead, stopOutboundSequenceForLead } from '../lib/outbound-sequence-ops.js';
+import {
+  dismissSequenceSalvageForLead,
+  stopLeadsOutboundSequenceBulk,
+  stopOutboundSequenceForLead,
+} from '../lib/outbound-sequence-ops.js';
 import {
   MAX_OUTBOUND_SEQUENCE_ENROLLMENT_BULK,
   setLeadOutboundSequenceEnrollment,
@@ -25,9 +29,35 @@ export function createClientOpsRouter(deps) {
     upsertLeadHandoff,
     query,
     isPostgres,
+    addToCallQueue,
+    insertLeadSequenceState,
+    getNextBusinessHour,
+    isBusinessHours,
+    getCallTimeBanditState,
+    TIMEZONE,
   } = deps || {};
 
   const router = Router();
+
+  function operatorSequenceDeps() {
+    return {
+      query,
+      getFullClient,
+      isPostgres: !!isPostgres,
+      getLeadSequenceState,
+      updateLeadSequenceState,
+      getCallQueueByPhone,
+      updateCallQueueStatus,
+      getLeadHandoffByPhone,
+      upsertLeadHandoff,
+      addToCallQueue,
+      insertLeadSequenceState,
+      getNextBusinessHour,
+      isBusinessHours,
+      getCallTimeBanditState,
+      timezone: TIMEZONE,
+    };
+  }
 
   function hasOperatorApiKey(req) {
     const apiKey = req.get('X-API-Key');
@@ -392,15 +422,8 @@ export function createClientOpsRouter(deps) {
         leadPhone,
         enrolled: req.body.enrolled,
         actor,
-        query,
-        getFullClient,
-        isPostgres: !!isPostgres,
-        getLeadSequenceState,
-        updateLeadSequenceState,
-        getCallQueueByPhone,
-        updateCallQueueStatus,
-        getLeadHandoffByPhone,
-        upsertLeadHandoff,
+        queueNow: req.body?.queueNow === true,
+        ...operatorSequenceDeps(),
       });
       if (!out.ok) {
         const status =
@@ -437,16 +460,9 @@ export function createClientOpsRouter(deps) {
         leadPhones,
         enrolled: req.body.enrolled,
         actor,
+        queueNow: req.body?.queueNow === true,
         maxItems: MAX_OUTBOUND_SEQUENCE_ENROLLMENT_BULK,
-        query,
-        getFullClient,
-        isPostgres: !!isPostgres,
-        getLeadSequenceState,
-        updateLeadSequenceState,
-        getCallQueueByPhone,
-        updateCallQueueStatus,
-        getLeadHandoffByPhone,
-        upsertLeadHandoff,
+        ...operatorSequenceDeps(),
       });
       if (out.error === 'tenant_sequence_disabled') {
         return res.status(409).json({ ok: false, error: out.error });
@@ -461,6 +477,38 @@ export function createClientOpsRouter(deps) {
       return res.status(out.partial ? 207 : 200).json(out);
     } catch (error) {
       console.error('[OUTBOUND SEQUENCE BULK ENROLLMENT ERROR]', error);
+      return res.status(500).json({ ok: false, error: error.message || String(error) });
+    }
+  });
+
+  router.post('/api/clients/:clientKey/outbound-sequence/stop/bulk', async (req, res) => {
+    const { clientKey } = req.params;
+    if (!hasOperatorApiKey(req)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    try {
+      const leadPhones = Array.isArray(req.body?.leadPhones) ? req.body.leadPhones : [];
+      const actor = String(req.body?.actor || 'operator').trim() || 'operator';
+      if (!leadPhones.length) {
+        return res.status(400).json({ ok: false, error: 'leadPhones must be a non-empty array' });
+      }
+      const out = await stopLeadsOutboundSequenceBulk({
+        clientKey,
+        leadPhones,
+        actor,
+        getLeadSequenceState,
+        updateLeadSequenceState,
+        getCallQueueByPhone,
+        updateCallQueueStatus,
+        getLeadHandoffByPhone,
+        upsertLeadHandoff,
+      });
+      if (!out.ok) {
+        return res.status(400).json({ ok: false, error: out.error || 'stop_failed', ...out });
+      }
+      return res.status(out.partial ? 207 : 200).json(out);
+    } catch (error) {
+      console.error('[OUTBOUND SEQUENCE BULK STOP ERROR]', error);
       return res.status(500).json({ ok: false, error: error.message || String(error) });
     }
   });

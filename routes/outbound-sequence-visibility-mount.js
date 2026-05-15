@@ -83,6 +83,76 @@ export function createOutboundSequenceVisibilityRouter(deps) {
     }
   }
 
+  async function computeLeadEnrollmentStats(clientKey) {
+    const cap = 5000;
+    if (typeof query !== 'function' || !clientKey) {
+      return { totalSampled: 0, optedIn: 0, notOptedIn: 0, capped: false };
+    }
+    const res = await query(
+      `
+      SELECT lead_dial_context_json AS "leadDialContextJson"
+      FROM leads
+      WHERE client_key = $1
+      ORDER BY created_at DESC
+      LIMIT $2
+    `,
+      [clientKey, cap]
+    ).catch(() => ({ rows: [] }));
+    const rows = res?.rows || [];
+    let optedIn = 0;
+    for (const row of rows) {
+      if (isLeadExplicitlyOptedIntoOutboundSequence(row.leadDialContextJson)) optedIn += 1;
+    }
+    return {
+      totalSampled: rows.length,
+      optedIn,
+      notOptedIn: Math.max(0, rows.length - optedIn),
+      capped: rows.length >= cap,
+    };
+  }
+
+  async function loadPendingSequenceQueueMap(clientKey, phones = []) {
+    const map = new Map();
+    if (!isPostgres || typeof query !== 'function' || !clientKey) return map;
+    const unique = uniqueTrimmed(phones);
+    if (!unique.length) return map;
+    const res = await query(
+      `
+      SELECT
+        lead_phone AS "leadPhone",
+        MIN(scheduled_for) AS "scheduledFor",
+        COUNT(*)::int AS "pendingCount"
+      FROM call_queue
+      WHERE client_key = $1
+        AND call_type = 'vapi_call'
+        AND status IN ('pending', 'processing')
+        AND (call_data->>'triggerType') = 'sequence_next'
+        AND lead_phone IN (${buildInClause(2, unique)})
+      GROUP BY lead_phone
+    `,
+      [clientKey, ...unique]
+    ).catch(() => ({ rows: [] }));
+    for (const row of res?.rows || []) {
+      const phone = String(row.leadPhone || '').trim();
+      if (!phone) continue;
+      map.set(phone, {
+        scheduledFor: row.scheduledFor ? new Date(row.scheduledFor).toISOString() : null,
+        pendingCount: parseInt(row.pendingCount, 10) || 0,
+      });
+    }
+    return map;
+  }
+
+  function sequenceRowStuckHint(row, pendingQueue) {
+    const status = String(row?.status || '').trim().toLowerCase();
+    if (status !== 'active') return null;
+    const updatedAt = row?.updatedAt ? new Date(row.updatedAt).getTime() : NaN;
+    const ageH = Number.isFinite(updatedAt) ? (Date.now() - updatedAt) / (1000 * 60 * 60) : null;
+    if (ageH != null && ageH > 48) return 'stale_active';
+    if (!row?.nextStageScheduledFor && !(pendingQueue?.pendingCount > 0)) return 'no_next_scheduled';
+    return null;
+  }
+
   async function loadLeadAndHandoffMap(clientKey, phones = []) {
     const map = new Map();
     if (typeof query !== 'function' || !clientKey) return map;
@@ -334,6 +404,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         [clientKey, OPERATOR_SEQUENCE_STOP_SOURCE]
       );
       const r = rows?.rows?.[0] || {};
+      const enrollment = await computeLeadEnrollmentStats(clientKey);
       return res.json({
         ok: true,
         clientKey,
@@ -353,6 +424,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
           abandonedToday: parseInt(r.abandoned_today, 10) || 0,
           nextStageQueued: parseInt(r.next_stage_queued, 10) || 0,
           oldestActiveUpdatedAt: r.oldest_active_updated_at ? new Date(r.oldest_active_updated_at).toISOString() : null,
+          enrollment,
         },
       });
     } catch (error) {
@@ -440,7 +512,19 @@ export function createOutboundSequenceVisibilityRouter(deps) {
           };
         })
         .filter((row) => matchesDashboardCohort({ cohort: row?.dashboardCohort }, filter));
-      const pageRows = filteredRows.slice(offset, offset + limit);
+      const queueMap = await loadPendingSequenceQueueMap(
+        clientKey,
+        filteredRows.map((row) => row?.leadPhone || '')
+      );
+      const pageRows = filteredRows.slice(offset, offset + limit).map((row) => {
+        const phone = String(row?.leadPhone || '').trim();
+        const pendingSequenceQueue = queueMap.get(phone) || null;
+        return {
+          ...row,
+          pendingSequenceQueue,
+          stuckHint: sequenceRowStuckHint(row, pendingSequenceQueue),
+        };
+      });
 
       return res.json({
         ok: true,
@@ -448,6 +532,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         limit,
         offset,
         filter,
+        listMode: 'sequence_state',
         total: filteredRows.length,
         sequence: {
           killSwitchActive,
@@ -463,6 +548,85 @@ export function createOutboundSequenceVisibilityRouter(deps) {
     } catch (error) {
       console.error('[OUTBOUND SEQUENCE LEADS ERROR]', error);
       return res.status(500).json({ ok: false, error: 'outbound_sequence_leads_failed', message: error?.message || String(error) });
+    }
+  });
+
+  router.get('/outbound-sequence/:clientKey/enrollable-leads', async (req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store');
+      const { clientKey } = req.params;
+      const limit = clamp(req.query.limit, 1, 500, 120);
+      const offset = clamp(req.query.offset, 0, 50_000, 0);
+      const client = await getFullClient?.(clientKey, { bypassCache: false }).catch(() => null);
+      if (!client) return res.status(404).json({ ok: false, error: 'client_not_found' });
+
+      const { getValidatedOutboundSequence, validateOutboundSequenceConfig, isOutboundSequenceGloballyDisabled } =
+        await import('../lib/outbound-sequence.js');
+      const killSwitchActive = isOutboundSequenceGloballyDisabled();
+      const validated = getValidatedOutboundSequence(client);
+      const raw = client?.outboundSequence;
+      const v = raw && typeof raw === 'object' ? validateOutboundSequenceConfig(raw) : { ok: false, errors: ['outboundSequence missing'] };
+
+      const leadRes = await query(
+        `
+        SELECT
+          id,
+          phone,
+          phone_match_key AS "phoneMatchKey",
+          name,
+          service,
+          source,
+          notes,
+          status AS "leadStatus",
+          created_at AS "createdAt",
+          lead_dial_context_json AS "leadDialContextJson"
+        FROM leads
+        WHERE client_key = $1
+        ORDER BY created_at DESC
+        LIMIT $2
+      `,
+        [clientKey, 2000]
+      ).catch(() => ({ rows: [] }));
+
+      const candidates = (leadRes?.rows || []).filter(
+        (row) => !isLeadExplicitlyOptedIntoOutboundSequence(row.leadDialContextJson)
+      );
+      const pageSlice = candidates.slice(offset, offset + limit).map((row) => ({
+        leadPhone: row.phone,
+        sequenceOptedIn: false,
+        listMode: 'enrollable',
+        lead: {
+          id: row.id != null ? String(row.id) : null,
+          phone: row.phone || null,
+          name: row.name || null,
+          service: row.service || null,
+          source: row.source || null,
+          notes: row.notes || null,
+          status: row.leadStatus || null,
+          createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+        },
+        status: null,
+        dashboardCohort: 'classic',
+      }));
+
+      return res.json({
+        ok: true,
+        clientKey,
+        limit,
+        offset,
+        listMode: 'enrollable',
+        total: candidates.length,
+        sequence: {
+          killSwitchActive,
+          enabled: validated?.enabled === true,
+          configValid: !!validated,
+          configErrors: v.ok ? [] : (v.errors || []),
+        },
+        rows: pageSlice,
+      });
+    } catch (error) {
+      console.error('[OUTBOUND SEQUENCE ENROLLABLE LEADS ERROR]', error);
+      return res.status(500).json({ ok: false, error: 'outbound_sequence_enrollable_failed', message: error?.message || String(error) });
     }
   });
 
