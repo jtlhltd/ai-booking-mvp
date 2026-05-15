@@ -10,6 +10,7 @@ import {
   SEQUENCE_ABANDONED_HANDOFF_SOURCE,
   SEQUENCE_COMPLETED_HANDOFF_SOURCE,
 } from '../lib/dashboard-follow-up-filters.js';
+import { isLeadExplicitlyOptedIntoOutboundSequence } from '../lib/lead-dial-context.js';
 
 export function createOutboundSequenceVisibilityRouter(deps) {
   const { query, getFullClient, isPostgres, phoneMatchKey } = deps || {};
@@ -104,7 +105,8 @@ export function createOutboundSequenceVisibilityRouter(deps) {
           source,
           notes,
           status AS "leadStatus",
-          created_at AS "createdAt"
+          created_at AS "createdAt",
+          lead_dial_context_json AS "leadDialContextJson"
         FROM leads
         WHERE client_key = $1
           AND (${leadWhere})
@@ -129,6 +131,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
               status: row.leadStatus || null,
               createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
             },
+            sequenceOptedIn: isLeadExplicitlyOptedIntoOutboundSequence(row.leadDialContextJson),
           }
         );
       }
@@ -433,6 +436,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
             dashboardCohort: cohortMeta.cohort,
             lead: context?.lead || null,
             handoff: context?.handoff || null,
+            sequenceOptedIn: context?.sequenceOptedIn === true,
           };
         })
         .filter((row) => matchesDashboardCohort({ cohort: row?.dashboardCohort }, filter));
@@ -849,6 +853,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
           clientKey,
           phone,
           row: { ...row, stagesCompleted: stages, dashboardCohort: cohortMeta.cohort },
+          sequenceOptedIn: context?.sequenceOptedIn === true,
           lead: context?.lead || null,
           handoff: context?.handoff || null,
           nextQueue,

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { dismissSequenceSalvageForLead, stopOutboundSequenceForLead } from '../lib/outbound-sequence-ops.js';
+import { setLeadOutboundSequenceEnrollment } from '../lib/outbound-sequence-enrollment.js';
 
 export function createClientOpsRouter(deps) {
   const {
@@ -18,6 +19,8 @@ export function createClientOpsRouter(deps) {
     updateCallQueueStatus,
     getLeadHandoffByPhone,
     upsertLeadHandoff,
+    query,
+    isPostgres,
   } = deps || {};
 
   const router = Router();
@@ -362,6 +365,51 @@ export function createClientOpsRouter(deps) {
       });
     } catch (error) {
       console.error('[OUTBOUND SEQUENCE STOP ERROR]', error);
+      return res.status(500).json({ ok: false, error: error.message || String(error) });
+    }
+  });
+
+  router.post('/api/clients/:clientKey/outbound-sequence/enrollment', async (req, res) => {
+    const { clientKey } = req.params;
+    if (!hasOperatorApiKey(req)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    try {
+      const leadPhone = String(req.body?.leadPhone || '').trim();
+      const actor = String(req.body?.actor || 'operator').trim() || 'operator';
+      if (!leadPhone) {
+        return res.status(400).json({ ok: false, error: 'leadPhone is required' });
+      }
+      if (req.body?.enrolled == null) {
+        return res.status(400).json({ ok: false, error: 'enrolled is required (boolean)' });
+      }
+      const out = await setLeadOutboundSequenceEnrollment({
+        clientKey,
+        leadPhone,
+        enrolled: req.body.enrolled,
+        actor,
+        query,
+        getFullClient,
+        isPostgres: !!isPostgres,
+        getLeadSequenceState,
+        updateLeadSequenceState,
+        getCallQueueByPhone,
+        updateCallQueueStatus,
+        getLeadHandoffByPhone,
+        upsertLeadHandoff,
+      });
+      if (!out.ok) {
+        const status =
+          out.error === 'lead_not_found'
+            ? 404
+            : out.error === 'tenant_sequence_disabled'
+              ? 409
+              : 400;
+        return res.status(status).json({ ok: false, error: out.error });
+      }
+      return res.json(out);
+    } catch (error) {
+      console.error('[OUTBOUND SEQUENCE ENROLLMENT ERROR]', error);
       return res.status(500).json({ ok: false, error: error.message || String(error) });
     }
   });

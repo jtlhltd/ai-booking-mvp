@@ -178,6 +178,8 @@ export function mountApi(app, deps) {
       updateCallQueueStatus: deps.updateCallQueueStatus,
       getLeadHandoffByPhone: deps.getLeadHandoffByPhone,
       upsertLeadHandoff: deps.upsertLeadHandoff,
+      query: deps.query,
+      isPostgres: deps.isPostgres,
     })
   );
   app.use('/api/outreach', createOutreachRouter());

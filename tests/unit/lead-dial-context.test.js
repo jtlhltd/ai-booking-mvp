@@ -4,6 +4,7 @@ import {
   extractLeadDialContextFromImportLead,
   filterLeadDialContextToScalars,
   isLeadExplicitlyOptedIntoOutboundSequence,
+  mergeOutboundSequenceEnrollmentIntoDialContext,
   LEAD_DIAL_CONTEXT_MAX_BYTES,
   normalizeLeadDialContextEnvelope,
   normalizeLeadDialContext,
@@ -192,6 +193,20 @@ describe('lead-dial-context', () => {
       firstMessage: 'Hello',
       systemMessage: 'Use the logistics script.'
     });
+  });
+
+  test('mergeOutboundSequenceEnrollmentIntoDialContext sets canonical opt-in flag', () => {
+    const enrolled = mergeOutboundSequenceEnrollmentIntoDialContext(
+      { outboundSequenceOptIn: false, sequenceOptIn: true },
+      { enrolled: true }
+    );
+    expect(enrolled).toEqual({ variableValues: { outboundSequenceOptIn: true } });
+    const unenrolled = mergeOutboundSequenceEnrollmentIntoDialContext(
+      { outboundSequenceOptIn: true, outboundDialMode: 'sequence' },
+      { enrolled: false }
+    );
+    expect(unenrolled).toEqual({ variableValues: { outboundSequenceOptIn: false } });
+    expect(isLeadExplicitlyOptedIntoOutboundSequence(unenrolled)).toBe(false);
   });
 
   test('isLeadExplicitlyOptedIntoOutboundSequence requires an explicit opt-in flag', () => {

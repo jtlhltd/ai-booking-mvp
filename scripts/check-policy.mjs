@@ -254,6 +254,8 @@ const rules = [
       'db/migrations/postgres-core-schema.js',
       'db/migrations/sqlite-core-schema.js',
       'lib/lead-dial-context.js',
+      'lib/outbound-sequence-enrollment.js',
+      'routes/outbound-sequence-visibility-mount.js',
       'lib/lead-import.js',
       'lib/leads-import.js',
       'lib/server-queue-workers.js',

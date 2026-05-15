@@ -183,6 +183,62 @@ describe('client-ops-mount contract coverage', () => {
     }));
   });
 
+  test('POST /api/clients/:clientKey/outbound-sequence/enrollment requires API key', async () => {
+    const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');
+    const router = createClientOpsRouter({});
+    const app = createContractApp({ mounts: [{ path: '/', router }] });
+    await request(app)
+      .post('/api/clients/c1/outbound-sequence/enrollment')
+      .send({ leadPhone: '+447700900111', enrolled: true })
+      .expect(401);
+  });
+
+  test('POST /api/clients/:clientKey/outbound-sequence/enrollment returns ok on success', async () => {
+    const prev = process.env.API_KEY;
+    process.env.API_KEY = 'secret';
+    const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');
+    const router = createClientOpsRouter({
+      query: jest.fn(async (sql) => {
+        if (String(sql).includes('SELECT id')) {
+          return { rows: [{ id: 1, phone: '+447700900111', leadDialContextJson: { outboundSequenceOptIn: false } }] };
+        }
+        return {
+          rows: [{
+            id: 1,
+            phone: '+447700900111',
+            leadDialContextJson: { variableValues: { outboundSequenceOptIn: true } },
+          }],
+        };
+      }),
+      getFullClient: jest.fn(async () => ({
+        outboundSequence: {
+          enabled: true,
+          stages: [{
+            id: 's1',
+            firstMessage: 'Hi',
+            systemMessage: 'Sys',
+            requiredFields: ['decisionMakerName'],
+            maxAttemptsInStage: 2,
+            isFinal: true,
+          }],
+        },
+      })),
+    });
+    const app = createContractApp({ mounts: [{ path: '/', router }] });
+    const res = await request(app)
+      .post('/api/clients/c1/outbound-sequence/enrollment')
+      .set('X-API-Key', 'secret')
+      .send({ leadPhone: '+447700900111', enrolled: true, actor: 'ops-user' })
+      .expect(200);
+    expect(res.body).toEqual(expect.objectContaining({
+      ok: true,
+      clientKey: 'c1',
+      enrolled: true,
+      sequenceOptedIn: true,
+    }));
+    process.env.API_KEY = prev;
+  });
+
   test('POST /api/clients/:clientKey/outbound-sequence/salvage-dismiss returns ok on success', async () => {
     const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');
     const router = createClientOpsRouter({

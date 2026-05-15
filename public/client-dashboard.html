@@ -9271,10 +9271,12 @@
                     const titleLine = title !== phone && phone
                         ? `<div class="tom-ab-test-meta" style="margin-top:2px;">${escapeHtml(phone)}</div>`
                         : '';
+                    const multiCallEnrolled = r?.sequenceOptedIn === true;
                     const metaBits = [
                         lead.service ? `Service: ${lead.service}` : '',
                         lead.source ? `Source: ${lead.source}` : '',
                         lead.status ? `Lead status: ${lead.status}${terminal.kind === 'stopped' ? ' (CRM)' : ''}` : '',
+                        `Multi-call: ${multiCallEnrolled ? 'enrolled' : 'not enrolled'}`,
                     ].filter(Boolean);
                     const createdLine = lead.createdAt
                         ? `Lead created ${formatRelativeWithAbsolute(lead.createdAt, tz)}`
@@ -9305,6 +9307,7 @@
                                 ${outboundSequenceBadgeHtml(`Stage: ${stage}`, 'info')}
                                 ${outboundSequenceBadgeHtml(`Attempts: ${attempts}`, 'neutral')}
                                 ${r?.dashboardCohort && r.dashboardCohort !== 'unclassified' ? outboundSequenceBadgeHtml(`Bucket: ${dashboardCohortFilterLabel(r.dashboardCohort)}`, 'neutral') : ''}
+                                ${outboundSequenceBadgeHtml(multiCallEnrolled ? 'Multi-call enrolled' : 'Multi-call not enrolled', multiCallEnrolled ? 'success' : 'neutral')}
                             </div>
                             ${actions}
                             <div class="outbound-seq-row__meta">${escapeHtml(nextAction)}</div>
@@ -9424,6 +9427,10 @@
                     }).join('')
                 }</ol>`
                 : '<div class="tom-ab-test-meta" style="margin-top:6px;">No completed stages yet.</div>';
+            const sequenceOptedIn = payload?.sequenceOptedIn === true || row?.sequenceOptedIn === true;
+            const enrollActionHtml = sequenceOptedIn
+                ? `<button type="button" class="export-btn secondary" data-seq-unenroll="${escapeHtml(row.leadPhone || '')}">Remove from multi-call…</button>`
+                : `<button type="button" class="export-btn secondary" data-seq-enroll="${escapeHtml(row.leadPhone || '')}">Enroll in multi-call…</button>`;
             const stopActionHtml = row.status === 'active'
                 ? `<button type="button" class="export-btn secondary" data-seq-stop="${escapeHtml(row.leadPhone || '')}">Stop future sequence dials…</button>`
                 : '';
@@ -9434,6 +9441,7 @@
                     ${fact('Lead source', lead.source || '—')}
                     ${fact('Service', lead.service || '—')}
                     ${fact('Lead status', (lead.status || '—') + (terminal.kind === 'stopped' ? ' (CRM — unchanged by stop)' : ''))}
+                    ${fact('Multi-call enrollment', sequenceOptedIn ? 'Enrolled' : 'Not enrolled')}
                     ${fact('Lead created', lead.createdAt ? formatRelativeWithAbsolute(lead.createdAt, tz) : '—')}
                     ${fact('Sequence started', row.startedAt ? formatRelativeWithAbsolute(row.startedAt, tz) : '—')}
                     ${fact('Last updated', row.updatedAt ? formatRelativeWithAbsolute(row.updatedAt, tz) : '—')}
@@ -9463,6 +9471,7 @@
                         <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
                             ${outboundSequenceBadgeHtml(statusMeta.label, statusMeta.tone)}
                             ${row.dashboardCohort && row.dashboardCohort !== 'unclassified' ? outboundSequenceBadgeHtml(`Bucket: ${dashboardCohortFilterLabel(row.dashboardCohort)}`, 'neutral') : ''}
+                            ${enrollActionHtml}
                             ${stopActionHtml}
                         </div>
                     </div>
@@ -9737,6 +9746,41 @@
                         const leadId = journeyBtn.getAttribute('data-seq-journey') || '';
                         const title = journeyBtn.getAttribute('data-seq-title') || 'Lead';
                         if (leadId) viewLeadTimeline(leadId, title);
+                        return;
+                    }
+                    const enrollBtn = e.target.closest('[data-seq-enroll]');
+                    const unenrollBtn = e.target.closest('[data-seq-unenroll]');
+                    if (enrollBtn || unenrollBtn) {
+                        const phone = (enrollBtn || unenrollBtn).getAttribute(enrollBtn ? 'data-seq-enroll' : 'data-seq-unenroll') || '';
+                        if (!phone) return;
+                        const enrolled = !!enrollBtn;
+                        const btn = enrollBtn || unenrollBtn;
+                        try {
+                            btn.disabled = true;
+                            await postOperatorClientAction(
+                                `/api/clients/${encodeURIComponent(currentClient)}/outbound-sequence/enrollment`,
+                                { leadPhone: phone, enrolled, actor: 'operator' },
+                                enrolled ? 'Enroll in multi-call' : 'Remove from multi-call'
+                            );
+                            showToast(
+                                enrolled ? 'Enrolled in multi-call' : 'Removed from multi-call',
+                                enrolled
+                                    ? 'This lead can use the multi-stage dial program on the next queue/import pass.'
+                                    : 'Multi-call enrollment cleared. Active sequence dials were stopped if any were running.',
+                                'success'
+                            );
+                            await refreshOutboundSequenceWindow(currentClient, { phoneLookup: phone });
+                            await loadFollowUpQueue(currentClient, { page: 1, silent: false });
+                        } catch (err) {
+                            showToast(
+                                enrolled ? 'Enroll failed' : 'Unenroll failed',
+                                err?.message || 'Could not update multi-call enrollment.',
+                                'error',
+                                3500
+                            );
+                        } finally {
+                            btn.disabled = false;
+                        }
                         return;
                     }
                     const btn = e.target.closest('[data-seq-stop]');
