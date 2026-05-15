@@ -84,7 +84,8 @@ describe('Request Timeout Middleware', () => {
     expect(getTimeoutForPath('/api/bulk-import')).toBe(TIMEOUTS.bulkImport);
     expect(getTimeoutForPath('/api/analytics')).toBe(TIMEOUTS.analytics);
     expect(getTimeoutForPath('/api/test')).toBe(TIMEOUTS.default);
-    expect(getTimeoutForPath('/api/demo-dashboard/acme')).toBe(TIMEOUTS.demoDashboard);
+    expect(getTimeoutForPath('/api/client-dashboard/acme')).toBe(TIMEOUTS.clientDashboardData);
+    expect(getTimeoutForPath('/api/demo-dashboard/acme')).toBe(TIMEOUTS.clientDashboardData);
   });
   
   test('smartRequestTimeout should use path-based timeout', () => {

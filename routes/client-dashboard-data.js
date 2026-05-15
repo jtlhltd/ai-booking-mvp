@@ -1,46 +1,47 @@
 /**
- * Demo dashboard data endpoint (client dashboard polling).
+ * Live client dashboard metrics (KPIs, leads, calls, outreach capacity).
  *
- * Extracted from server.js to make it contract-testable and to shrink server.js before including it in coverage.
- *
- * GET /api/demo-dashboard/:clientKey
+ * GET /api/client-dashboard/:clientKey
+ * Legacy alias: GET /api/demo-dashboard/:clientKey (deprecated)
  */
 import { Router } from 'express';
 import {
-  computeDemoDashboardEtag,
-  demoDashboardCacheKey,
-  getCachedDemoDashboard,
-  getDemoDashboardCacheTtlMs,
-  respondDemoDashboard,
-  setCachedDemoDashboard
-} from '../lib/demo-dashboard-response-cache.js';
+  computeClientDashboardEtag,
+  clientDashboardCacheKey,
+  getCachedClientDashboard,
+  getClientDashboardCacheTtlMs,
+  respondClientDashboard,
+  setCachedClientDashboard
+} from '../lib/client-dashboard-response-cache.js';
 import { sqlDaysAgo as sqlDaysAgoLib } from '../lib/sql-relative-interval.js';
 
+function applyDeprecatedClientDashboardHeaders(res, clientKey) {
+  res.set('Deprecation', 'true');
+  res.set('Link', `</api/client-dashboard/${encodeURIComponent(String(clientKey))}>; rel="successor-version"`);
+}
+
 /**
- * This router intentionally uses a wide deps surface because the original handler referenced many server.js locals.
- * The goal of this extraction is to move the high-denominator logic out of `server.js` without changing behavior.
- *
  * @param {Record<string, any>} deps
  */
-export function createDemoDashboardRouter(deps) {
+export function createClientDashboardDataRouter(deps) {
   const router = Router();
+  const handler = deps?.handleClientDashboardData;
 
-  router.get('/demo-dashboard/:clientKey', async (req, res) => {
-    const handler = deps?.handleDemoDashboard;
+  const route = async (req, res, { deprecated = false } = {}) => {
     if (typeof handler !== 'function') {
-      return res.status(500).json({ ok: false, error: 'demo_dashboard_handler_not_wired' });
+      return res.status(500).json({ ok: false, error: 'client_dashboard_handler_not_wired' });
     }
+    if (deprecated) applyDeprecatedClientDashboardHeaders(res, req.params.clientKey);
     return await handler(req, res, deps);
-  });
+  };
+
+  router.get('/client-dashboard/:clientKey', (req, res) => route(req, res));
+  router.get('/demo-dashboard/:clientKey', (req, res) => route(req, res, { deprecated: true }));
 
   return router;
 }
 
-/**
- * Full extracted implementation from `server.js`.
- * This is injected into `createDemoDashboardRouter({ handleDemoDashboard })`.
- */
-export async function handleDemoDashboard(req, res, deps) {
+export async function handleClientDashboardData(req, res, deps) {
   const {
     getFullClient,
     activityFeedChannelLabel,
@@ -154,7 +155,8 @@ export async function handleDemoDashboard(req, res, deps) {
     WHERE x.phone_key IS NOT NULL
   `;
 
-  const demoDashboardCallsAndPhoneStatsSql = deps?.demoDashboardCallsAndPhoneStatsSql;
+  const clientDashboardCallsAndPhoneStatsSql =
+    deps?.clientDashboardCallsAndPhoneStatsSql ?? deps?.demoDashboardCallsAndPhoneStatsSql;
   /** Unnest parallel arrays from the lead query ($2..$4) into rows for `call_phone_stats`. */
   const defaultDashboardCallPhoneStatsFromArraysCte = `call_phone_stats AS (
       SELECT
@@ -187,17 +189,17 @@ export async function handleDemoDashboard(req, res, deps) {
   try {
     const bustDashboardCache =
       req.query.t != null && String(req.query.t || '').trim() !== '';
-    const dashboardCacheTtlMs = getDemoDashboardCacheTtlMs();
-    const dashboardCacheKey = demoDashboardCacheKey(clientKey, briefRequested);
+    const dashboardCacheTtlMs = getClientDashboardCacheTtlMs();
+    const dashboardCacheKey = clientDashboardCacheKey(clientKey, briefRequested);
 
     if (!bustDashboardCache && dashboardCacheTtlMs > 0) {
-      const cached = getCachedDemoDashboard(dashboardCacheKey);
+      const cached = getCachedClientDashboard(dashboardCacheKey);
       if (cached) {
         const inm = String(req.headers['if-none-match'] || '').trim();
         if (inm && inm === cached.etag) {
-          return respondDemoDashboard(res, { etag: cached.etag, status: 304, cacheHeader: 'hit' });
+          return respondClientDashboard(res, { etag: cached.etag, status: 304, cacheHeader: 'hit' });
         }
-        return respondDemoDashboard(res, { etag: cached.etag, body: cached.body, cacheHeader: 'hit' });
+        return respondClientDashboard(res, { etag: cached.etag, body: cached.body, cacheHeader: 'hit' });
       }
     }
 
@@ -270,8 +272,8 @@ export async function handleDemoDashboard(req, res, deps) {
         NULL AS dial_slots_used_local_today
     `;
 
-    /** Rolling 7d/30d dial + reach counts and last dial time (Postgres); SQLite uses `demoDashboardOutreachPulseSqlite` with the same “reached” rules. */
-    const demoDashboardOutreachPulseSql = `
+    /** Rolling 7d/30d dial + reach counts and last dial time (Postgres); SQLite uses `clientDashboardOutreachPulseSqlite` with the same “reached” rules. */
+    const clientDashboardOutreachPulseSql = `
       WITH raw AS (
         SELECT
           c.lead_phone,
@@ -358,7 +360,7 @@ export async function handleDemoDashboard(req, res, deps) {
     `;
 
     /** Same outreach pulse as Postgres, for SQLite local/tests (digit filter uses GLOB vs regexp_replace). */
-    const demoDashboardOutreachPulseSqlite = `
+    const clientDashboardOutreachPulseSqlite = `
       WITH raw AS (
         SELECT
           lead_phone,
@@ -454,10 +456,10 @@ export async function handleDemoDashboard(req, res, deps) {
       // which caused `query(undefined)` → crash in db/query.js. Fall back to the two-query path below.
       if (
         isPostgres &&
-        typeof demoDashboardCallsAndPhoneStatsSql === 'string' &&
-        demoDashboardCallsAndPhoneStatsSql.trim() !== ''
+        typeof clientDashboardCallsAndPhoneStatsSql === 'string' &&
+        clientDashboardCallsAndPhoneStatsSql.trim() !== ''
       ) {
-        const merged = await query(demoDashboardCallsAndPhoneStatsSql, [
+        const merged = await query(clientDashboardCallsAndPhoneStatsSql, [
           clientKey,
           activityRollingSinceIso,
           dashboardCallsStatsCutoffIso
@@ -916,8 +918,8 @@ export async function handleDemoDashboard(req, res, deps) {
           )
         : Promise.resolve({ rows: [{ callable_leads_today: null, blocked_daily_limit_today: null }] }),
       isPostgres
-        ? query(demoDashboardOutreachPulseSql, outreachPulseParams)
-        : query(demoDashboardOutreachPulseSqlite, outreachPulseParams),
+        ? query(clientDashboardOutreachPulseSql, outreachPulseParams)
+        : query(clientDashboardOutreachPulseSqlite, outreachPulseParams),
       isPostgres
         ? query(demoOutreachQueuePulseSqlPostgres, [clientKey, activityRollingSinceIso, tenantTz])
         : query(demoOutreachQueuePulseSqlite, [clientKey, activityRollingSinceIso]),
@@ -1490,7 +1492,7 @@ export async function handleDemoDashboard(req, res, deps) {
                 })
               )
               .catch((err) =>
-                console.error('[DEMO DASHBOARD] VAPI fallback upsertCall failed:', err.message)
+                console.error('[CLIENT DASHBOARD] VAPI fallback upsertCall failed:', err.message)
               );
           }
         }
@@ -1764,7 +1766,7 @@ export async function handleDemoDashboard(req, res, deps) {
           scriptExpSource = 'inferred';
         }
       } catch (infErr) {
-        console.error('[DEMO DASHBOARD] outbound A/B dimension infer error:', infErr?.message || infErr);
+        console.error('[CLIENT DASHBOARD] outbound A/B dimension infer error:', infErr?.message || infErr);
       }
     }
     if (!voiceExpName && !openingExpName && !scriptExpName) {
@@ -1794,7 +1796,7 @@ export async function handleDemoDashboard(req, res, deps) {
           }
         }
       } catch (bundleErr) {
-        console.error('[DEMO DASHBOARD] outbound A/B bundle infer error:', bundleErr?.message || bundleErr);
+        console.error('[CLIENT DASHBOARD] outbound A/B bundle infer error:', bundleErr?.message || bundleErr);
       }
     }
 
@@ -1813,7 +1815,7 @@ export async function handleDemoDashboard(req, res, deps) {
             legacyOutboundAbExperimentSource = 'inferred';
           }
         } catch (infErr) {
-          console.error('[DEMO DASHBOARD] outbound A/B infer error:', infErr?.message || infErr);
+          console.error('[CLIENT DASHBOARD] outbound A/B infer error:', infErr?.message || infErr);
         }
       }
       if (legacyOutboundAbExperimentName) {
@@ -1824,7 +1826,7 @@ export async function handleDemoDashboard(req, res, deps) {
             legacyOutboundAbExperimentName
           );
         } catch (abSumErr) {
-          console.error('[DEMO DASHBOARD] outbound A/B summary error:', abSumErr?.message || abSumErr);
+          console.error('[CLIENT DASHBOARD] outbound A/B summary error:', abSumErr?.message || abSumErr);
         }
       }
     }
@@ -1841,7 +1843,7 @@ export async function handleDemoDashboard(req, res, deps) {
           scriptExpName ? getOutboundAbExperimentSummary(clientKey, scriptExpName) : Promise.resolve(null)
         ]);
       } catch (abSumErr) {
-        console.error('[DEMO DASHBOARD] outbound A/B dimensional summary error:', abSumErr?.message || abSumErr);
+        console.error('[CLIENT DASHBOARD] outbound A/B dimensional summary error:', abSumErr?.message || abSumErr);
       }
     }
 
@@ -1850,7 +1852,7 @@ export async function handleDemoDashboard(req, res, deps) {
       const { getVapiAssistantCreativeSnapshot } = await import('../lib/outbound-ab-baseline.js');
       assistantSnap = await getVapiAssistantCreativeSnapshot(client);
     } catch (asErr) {
-      console.error('[DEMO DASHBOARD] assistant snapshot error:', asErr?.message || asErr);
+      console.error('[CLIENT DASHBOARD] assistant snapshot error:', asErr?.message || asErr);
       assistantSnap = { voiceId: '', firstMessage: '', script: '', fetchFailedReason: 'snapshot_error' };
     }
     const scriptPreviewForAbPayload = (s) => {
@@ -1880,7 +1882,7 @@ export async function handleDemoDashboard(req, res, deps) {
         { preloadedSnap: assistantSnap }
       );
     } catch (enrichErr) {
-      console.error('[DEMO DASHBOARD] outbound A/B assistant enrich error:', enrichErr?.message || enrichErr);
+      console.error('[CLIENT DASHBOARD] outbound A/B assistant enrich error:', enrichErr?.message || enrichErr);
     }
 
     const { resolveOutboundAbDimensionsForDial, outboundAbDialWarning } = await import(
@@ -1940,7 +1942,7 @@ export async function handleDemoDashboard(req, res, deps) {
         dialActiveDimensions
       });
     } catch (liveResErr) {
-      console.error('[DEMO DASHBOARD] outbound A/B liveResults error:', liveResErr?.message || liveResErr);
+      console.error('[CLIENT DASHBOARD] outbound A/B liveResults error:', liveResErr?.message || liveResErr);
       liveResults = {
         serverTime: new Date().toISOString(),
         minSamplesPerVariant: 50,
@@ -2158,25 +2160,25 @@ export async function handleDemoDashboard(req, res, deps) {
       usageMeters,
       dashboardExperience
     };
-    const etag = computeDemoDashboardEtag(payload);
+    const etag = computeClientDashboardEtag(payload);
     if (!bustDashboardCache && dashboardCacheTtlMs > 0) {
-      setCachedDemoDashboard(dashboardCacheKey, etag, payload, dashboardCacheTtlMs);
+      setCachedClientDashboard(dashboardCacheKey, etag, payload, dashboardCacheTtlMs);
     }
     const inm = String(req.headers['if-none-match'] || '').trim();
     if (inm && inm === etag) {
-      return respondDemoDashboard(res, { etag, status: 304, cacheHeader: 'revalidated' });
+      return respondClientDashboard(res, { etag, status: 304, cacheHeader: 'revalidated' });
     }
-    return respondDemoDashboard(res, { etag, body: payload, cacheHeader: 'miss' });
+    return respondClientDashboard(res, { etag, body: payload, cacheHeader: 'miss' });
   } catch (error) {
-    console.error('[DEMO DASHBOARD ERROR]', error);
+    console.error('[CLIENT DASHBOARD ERROR]', error);
     await sendOperatorAlert?.({
       subject: `Dashboard sync failed for ${String(clientKey)}`,
-      html: `<p><code>GET /api/demo-dashboard/${String(clientKey)}</code> failed.</p><pre>${JSON.stringify(
+      html: `<p><code>GET /api/client-dashboard/${String(clientKey)}</code> failed.</p><pre>${JSON.stringify(
         { message: error?.message, stack: error?.stack?.split('\n').slice(0, 10).join('\n') },
         null,
         2
       )}</pre>`,
-      dedupeKey: `demo-dash-fail:${String(clientKey)}`,
+      dedupeKey: `client-dash-fail:${String(clientKey)}`,
       throttleMinutes: 90
     }).catch(() => {});
     return res.status(500).json({ ok: false, error: error?.message });

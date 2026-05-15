@@ -120,9 +120,9 @@ async function runTests(clientKey) {
     results.failed++;
   }
 
-  // Test 3: Dashboard Data (demo-dashboard endpoint)
+  // Test 3: Dashboard Data (client-dashboard endpoint)
   logSection('📊 Test 3: Dashboard Data');
-  const dashboardTest = await testEndpoint('Dashboard Data', `${BASE_URL}/api/demo-dashboard/${clientKey}`);
+  const dashboardTest = await testEndpoint('Dashboard Data', `${BASE_URL}/api/client-dashboard/${clientKey}`);
   if (dashboardTest.success && dashboardTest.data?.ok) {
     logTest('Dashboard data loaded', true);
     results.passed++;

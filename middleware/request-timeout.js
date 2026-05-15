@@ -67,7 +67,7 @@ export const TIMEOUTS = {
    * is still working — stay slightly under so we can return JSON 504 from this middleware first.
    * Client dashboard uses ~115s fetch abort; that still covers slow JSON 504 + read.
    */
-  demoDashboard: 98000,
+  clientDashboardData: 98000,
   reports: 90000,      // 1.5 minutes
   
   // Webhooks (should be fast)
@@ -84,8 +84,8 @@ export function getTimeoutForPath(path) {
     return TIMEOUTS.health;
   }
   // Heavy DB + optional Vapi fan-out; must not use 10s "stats" bucket (path contains "dashboard")
-  if (path.includes('/demo-dashboard')) {
-    return TIMEOUTS.demoDashboard;
+  if (path.includes('/client-dashboard') || path.includes('/demo-dashboard')) {
+    return TIMEOUTS.clientDashboardData;
   }
   if (path.includes('/stats') || path.includes('/dashboard')) {
     return TIMEOUTS.stats;

@@ -80,7 +80,7 @@ async function testDataFlow(clientKey) {
   logSection('📡 Test 2: Dashboard API Data Retrieval');
   
   try {
-    const response = await fetch(`${BASE_URL}/api/demo-dashboard/${clientKey}`);
+    const response = await fetch(`${BASE_URL}/api/client-dashboard/${clientKey}`);
     const data = await response.json();
     
     if (data.ok) {
@@ -199,7 +199,7 @@ async function testDataFlow(clientKey) {
   log('Data Flow Path:', 'cyan');
   log('   1. Event occurs (call, booking, lead follow-up)', 'gray');
   log('   2. Data saved to database (leads, call_queue, appointments tables)', 'gray');
-  log('   3. Dashboard API reads from database (/api/demo-dashboard/:clientKey)', 'gray');
+  log('   3. Dashboard API reads from database (/api/client-dashboard/:clientKey)', 'gray');
   log('   4. Dashboard polls API every 30 seconds OR receives EventSource updates', 'gray');
   log('   5. Dashboard UI updates with new data', 'gray');
   log('\n✅ If data is in the database, it will appear on the dashboard', 'green');

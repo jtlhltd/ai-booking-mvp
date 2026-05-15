@@ -7130,7 +7130,7 @@
             <div class="dashboard-api-error-banner" id="dashboardApiErrorBanner" hidden role="alert">
                 <strong>Live metrics did not load.</strong>
                 <span id="dashboardApiErrorDetail" class="dashboard-api-error-detail"></span>
-                Numbers come from <code>GET /api/demo-dashboard/&lt;your client key&gt;</code>. If that request fails or times out, tiles stay at zero while branding may still look correct. Check DevTools → Network, confirm the URL includes <code>?client=…</code>, then refresh.
+                Numbers come from <code>GET /api/client-dashboard/&lt;your client key&gt;</code>. If that request fails or times out, tiles stay at zero while branding may still look correct. Check DevTools → Network, confirm the URL includes <code>?client=…</code>, then refresh.
             </div>
         </header>
 
@@ -7795,7 +7795,7 @@
     
     <script>
         const DEMO_CLIENT_KEY = 'demo_client';
-        /** Sync with RECENT_LEADS_DASHBOARD_CAP in server.js (/api/demo-dashboard lead query LIMIT). Brief initial outreach load uses server DASHBOARD_BRIEF_LEADS_CAP with ?brief=1. */
+        /** Sync with RECENT_LEADS_DASHBOARD_CAP in client-dashboard-data route (lead query LIMIT). Brief initial outreach load uses server DASHBOARD_BRIEF_LEADS_CAP with ?brief=1. */
         const RECENT_LEADS_DASHBOARD_CAP = 5000;
         /** Must match server dashboard rolling window / touchpoint bucketing. */
         const DASHBOARD_ACTIVITY_TZ = 'Europe/London';
@@ -10541,7 +10541,7 @@ ${actionsRow}
             { name: 'Slack Digest', status: 'warning', detail: 'Add webhook to enable daily summary' }
         ];
 
-        /** Real tenants (including Tom / d2d-xpress-tom): start empty until /api/demo-dashboard/:key returns. DEMO_DATA is only for ?client=demo_client (and demo URL aliases). */
+        /** Real tenants (including Tom / d2d-xpress-tom): start empty until /api/client-dashboard/:key returns. DEMO_DATA is only for ?client=demo_client (and demo URL aliases). */
         function createEmptyDashboardData() {
             return {
                 totalLeads: 0,
@@ -10593,7 +10593,7 @@ ${actionsRow}
         let liveEventSource = null;
         let liveEventSourceReconnectAttempts = 0;
         let liveEventSourceReconnectDisabled = false;
-        /** True when /api/demo-dashboard/:key failed so UI would otherwise show silent zeros. */
+        /** True when /api/client-dashboard/:key failed so UI would otherwise show silent zeros. */
         let dashboardLivePayloadFailed = false;
         /** Last fetch error (HTTP or network) for the dashboard API — safe to show in UI. */
         let lastDashboardFetchError = '';
@@ -11175,7 +11175,7 @@ ${actionsRow}
                 try {
                     // Add timeout to prevent hanging
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 115000); // server smartRequestTimeout demoDashboard tier is 98s (JSON 504 before Render ~100s HTML 502); client waits slightly longer for slow reads
+                    const timeoutId = setTimeout(() => controller.abort(), 115000); // server smartRequestTimeout clientDashboardData tier is 98s (JSON 504 before Render ~100s HTML 502); client waits slightly longer for slow reads
                     const params = new URLSearchParams();
                     if (bustCache) params.set('t', String(Date.now()));
                     if (brief) params.set('brief', '1');
@@ -11185,7 +11185,7 @@ ${actionsRow}
                         headers['If-None-Match'] = lastDashboardEtag;
                     }
                     const res = await fetch(
-                        `${BASE_URL}/api/demo-dashboard/${encodeURIComponent(clientKey)}${q}`,
+                        `${BASE_URL}/api/client-dashboard/${encodeURIComponent(clientKey)}${q}`,
                         { signal: controller.signal, headers }
                     );
                     clearTimeout(timeoutId);
@@ -11236,7 +11236,7 @@ ${actionsRow}
             return null;
         }
 
-        /** Re-pull /api/demo-dashboard after CRM mutations so KPI tiles match Postgres without waiting for the 60s poll. */
+        /** Re-pull /api/client-dashboard after CRM mutations so KPI tiles match Postgres without waiting for the 60s poll. */
         async function refreshDashboardAfterMutation() {
             if (!currentClient || currentClient === DEMO_CLIENT_KEY) return;
             try {
@@ -11892,7 +11892,7 @@ ${actionsRow}
             }
         }
 
-        /** Outreach “lead→first call” tile: backed by demo-dashboard SQL (30d leads, first dial within 48h of lead creation). */
+        /** Outreach “lead→first call” tile: backed by client-dashboard SQL (30d leads, first dial within 48h of lead creation). */
         const OUTREACH_LEAD_FIRST_CALL_COHORT =
             'Cohort: lead row created in the last 30 days, and its first matching outbound dial within 48h of that time. Phones matched exactly or by last 10 digits.';
 
@@ -13421,7 +13421,7 @@ ${actionsRow}
             if (isOutreachDashboardClient(currentClient)) renderTomAbTestSection(dashboardData);
         }
 
-        /** Apply stop-test response immediately so the UI clears even if /demo-dashboard fetch fails or times out. */
+        /** Apply stop-test response immediately so the UI clears even if client-dashboard fetch fails or times out. */
         function tomAbMergeOutboundAbAfterStop(dim, data) {
             if (!dashboardData || typeof dashboardData !== 'object') return;
             const ab = dashboardData.outboundAbTest;
@@ -14319,7 +14319,7 @@ ${actionsRow}
             });
         }
 
-        /** Apply server-returned A/B slot so the challenger appears even if /demo-dashboard lags or times out. */
+        /** Apply server-returned A/B slot so the challenger appears even if client-dashboard lags or times out. */
         function tomAbMergeOutboundAbSlotFromServer(dim, data) {
             if (!dashboardData || typeof dashboardData !== 'object') return;
             if (dim !== 'voice' && dim !== 'opening' && dim !== 'script') return;
@@ -20947,7 +20947,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 .catch(() => paintPreview(new Set(), { loadingCrm: false }));
         }
 
-        /** After import, server counts rows in Postgres — apply so KPIs update even if demo-dashboard refresh fails. */
+        /** After import, server counts rows in Postgres — apply so KPIs update even if client-dashboard refresh fails. */
         function applyImportServerTotalsToDashboard(payload) {
             if (!payload || payload.totalLeadsInCrm == null) return;
             const n = parseInt(payload.totalLeadsInCrm, 10);

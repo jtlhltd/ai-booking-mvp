@@ -5,10 +5,11 @@ import path from 'node:path';
 const DASHBOARD_HTML = path.join(process.cwd(), 'public', 'client-dashboard.html');
 
 describe('outreach dashboard load policy (static guard)', () => {
-  test('parallel boot uses brief demo-dashboard with outreach fallback keys', () => {
+  test('parallel boot uses brief client-dashboard API with outreach fallback keys', () => {
     const html = fs.readFileSync(DASHBOARD_HTML, 'utf8');
     expect(html).toMatch(/OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK\s*=\s*\[[^\]]*d2d-xpress-tom/);
     expect(html).toMatch(/guessOutreachBriefForClient\(currentClient\)/);
+    expect(html).toMatch(/\/api\/client-dashboard\//);
     expect(html).toMatch(/fetchLiveData\(currentClient,\s*\{\s*brief:\s*guessBriefBoot\s*\}\)/);
     expect(html).toMatch(/Promise\.all\(\[clientsPromise,\s*livePromise\]\)/);
   });

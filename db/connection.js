@@ -28,7 +28,7 @@ export function resolvePgSsl(dbUrl, env = process.env) {
  * @param {NodeJS.ProcessEnv} [env]
  */
 /**
- * Postgres `statement_timeout` (ms) per session. Heavy routes (e.g. /api/demo-dashboard) can exceed 20s on real data.
+ * Postgres `statement_timeout` (ms) per session. Heavy routes (e.g. /api/client-dashboard) can exceed 20s on real data.
  * Render edge often returns HTML 502 if the origin is still busy — keep under proxy limits and tune this via env.
  */
 export function resolveStatementTimeoutMs(env = process.env) {

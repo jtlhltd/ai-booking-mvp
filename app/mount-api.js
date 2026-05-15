@@ -27,8 +27,8 @@ import { createLeadsExistingMatchKeysRouter } from '../routes/leads-existing-mat
 import { createAbTestResultsRouter } from '../routes/ab-test-results.js';
 import { createDemoTestCallRouter } from '../routes/demo-test-call.js';
 import { createCallTranscriptRouter } from '../routes/call-transcript.js';
-import { createDemoDashboardDebugRouter } from '../routes/demo-dashboard-debug.js';
-import { createDemoDashboardRouter, handleDemoDashboard } from '../routes/demo-dashboard.js';
+import { createClientDashboardDebugRouter } from '../routes/client-dashboard-debug.js';
+import { createClientDashboardDataRouter, handleClientDashboardData } from '../routes/client-dashboard-data.js';
 import { createLeadTimelineRouter } from '../routes/lead-timeline.js';
 import { createCallTimeBanditRouter } from '../routes/call-time-bandit.js';
 import { createRetryQueueRouter } from '../routes/retry-queue.js';
@@ -246,12 +246,12 @@ export function mountApi(app, deps) {
   app.use('/api', createAbTestResultsRouter());
   app.use('/api', createDemoTestCallRouter({ getFullClient, isDemoClient, fetchImpl }));
   app.use('/api', createCallTranscriptRouter({ query }));
-  app.use('/api', createDemoDashboardDebugRouter({ query, fetchImpl }));
+  app.use('/api', createClientDashboardDebugRouter({ query, fetchImpl }));
   app.use(
     '/api',
-    createDemoDashboardRouter({
-      handleDemoDashboard: (req, res, _routerDeps) =>
-        handleDemoDashboard(req, res, {
+    createClientDashboardDataRouter({
+      handleClientDashboardData: (req, res, _routerDeps) =>
+        handleClientDashboardData(req, res, {
           getFullClient,
           activityFeedChannelLabel,
           DateTime,

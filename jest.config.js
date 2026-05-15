@@ -74,7 +74,7 @@ export default {
     './lib/server-queue-workers.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
     './lib/outbound-ab-dashboard-handlers.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
     './lib/crm-integrations.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
-    './routes/demo-dashboard.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './routes/client-dashboard-data.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
     './lib/server-assistant-scheduling.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
     './routes/admin-email-tasks-deals.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
     // Module gates for the highest-risk surfaces (booking + admin).

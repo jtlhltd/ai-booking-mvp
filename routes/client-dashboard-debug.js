@@ -1,20 +1,30 @@
 /**
- * Demo dashboard diagnostic.
+ * Client dashboard diagnostic (recent calls + optional Vapi outcome probe).
  *
- * GET /api/demo-dashboard-debug/:clientKey
+ * GET /api/client-dashboard-debug/:clientKey
+ * Legacy alias: GET /api/demo-dashboard-debug/:clientKey (deprecated)
  */
 import { Router } from 'express';
+
+function applyDeprecatedClientDashboardDebugHeaders(res, clientKey) {
+  res.set('Deprecation', 'true');
+  res.set(
+    'Link',
+    `</api/client-dashboard-debug/${encodeURIComponent(String(clientKey))}>; rel="successor-version"`
+  );
+}
 
 /**
  * @param {{ query: (sql: string, params?: any[]) => Promise<{ rows?: any[] }>, fetchImpl?: typeof fetch }} deps
  */
-export function createDemoDashboardDebugRouter(deps) {
+export function createClientDashboardDebugRouter(deps) {
   const { query, fetchImpl } = deps || {};
   const router = Router();
   const fetchFn = fetchImpl || globalThis.fetch;
 
-  router.get('/demo-dashboard-debug/:clientKey', async (req, res) => {
+  const handler = async (req, res, { deprecated = false } = {}) => {
     const { clientKey } = req.params;
+    if (deprecated) applyDeprecatedClientDashboardDebugHeaders(res, clientKey);
     try {
       const recentCallRows = await query(
         `
@@ -85,11 +95,13 @@ export function createDemoDashboardDebugRouter(deps) {
             : 'Check vapiFallbackResults: if vapiStatus !== 200 or isEnded is false, that explains \"Result not received\".'
       });
     } catch (err) {
-      console.error('[DEMO DASHBOARD DEBUG]', err);
+      console.error('[CLIENT DASHBOARD DEBUG]', err);
       return res.status(500).json({ error: err.message });
     }
-  });
+  };
+
+  router.get('/client-dashboard-debug/:clientKey', (req, res) => handler(req, res));
+  router.get('/demo-dashboard-debug/:clientKey', (req, res) => handler(req, res, { deprecated: true }));
 
   return router;
 }
-
