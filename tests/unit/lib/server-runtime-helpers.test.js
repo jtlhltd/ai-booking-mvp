@@ -4,6 +4,7 @@ import {
   hoursFor,
   withRetry,
   isDemoClient,
+  isSandboxTenant,
   calculateCacheHitRate
 } from '../../../lib/server-runtime-helpers.js';
 
@@ -48,9 +49,10 @@ describe('lib/server-runtime-helpers', () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  test('isDemoClient', () => {
-    expect(isDemoClient(null)).toBe(false);
-    expect(isDemoClient({ clientKey: 'demo-x' })).toBe(true);
+  test('isSandboxTenant / isDemoClient alias', () => {
+    expect(isSandboxTenant(null)).toBe(false);
+    expect(isSandboxTenant({ clientKey: 'demo-x' })).toBe(true);
+    expect(isSandboxTenant({ clientKey: 'sandbox_client' })).toBe(true);
     expect(isDemoClient({ clientKey: 'demo-client' })).toBe(true);
     expect(isDemoClient({ clientKey: 'acme', isDemo: true })).toBe(true);
   });

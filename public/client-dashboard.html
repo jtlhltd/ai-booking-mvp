@@ -207,7 +207,7 @@
             color: var(--text);
         }
 
-        .demo-banner {
+        .sandbox-banner {
             margin-top: 18px;
             padding: 14px 18px;
             border-radius: 14px;
@@ -6589,7 +6589,7 @@
             border-color: rgba(92,106,196,0.6);
         }
 
-        body[data-theme="dark"] .demo-banner {
+        body[data-theme="dark"] .sandbox-banner {
             background: #2f3650;
             border-left-color: #f5a623;
             color: #ffd54f;
@@ -7124,8 +7124,8 @@
             </div>
         </div>
         
-            <div class="demo-banner" id="demoBanner">
-                <strong>Demo environment:</strong> This sandbox mirrors the live dashboard your clients see. We just preload it with mock data for Looms.
+            <div class="sandbox-banner" id="sandboxBanner">
+                <strong>Preview workspace:</strong> Sample data only — not a live client tenant. Production clients load live metrics from <code>/api/client-dashboard</code>.
             </div>
             <div class="dashboard-api-error-banner" id="dashboardApiErrorBanner" hidden role="alert">
                 <strong>Live metrics did not load.</strong>
@@ -7794,7 +7794,17 @@
     </div>
     
     <script>
-        const DEMO_CLIENT_KEY = 'demo_client';
+        const SANDBOX_CLIENT_KEY = 'sandbox_client';
+        const SANDBOX_CLIENT_ALIASES = new Set([
+            'sandbox',
+            'sandbox_client',
+            'sandbox-client',
+            'demo',
+            'demo_client',
+            'demo-client',
+            'preview',
+            'preview_client'
+        ]);
         /** Sync with RECENT_LEADS_DASHBOARD_CAP in client-dashboard-data route (lead query LIMIT). Brief initial outreach load uses server DASHBOARD_BRIEF_LEADS_CAP with ?brief=1. */
         const RECENT_LEADS_DASHBOARD_CAP = 5000;
         /** Must match server dashboard rolling window / touchpoint bucketing. */
@@ -7808,11 +7818,10 @@
         let activityFeedGroupRetries = true;
         let activityFeedLastPushAt = 0;
         let activityFeedLiveBadgeTimer = null;
-        const DEMO_URL_ALIASES = new Set(['demo', 'demo_client', 'demo-client', 'sandbox']);
-        function isDemoClientKey(key) {
+        function isSandboxClientKey(key) {
             if (key == null || typeof key !== 'string') return false;
             const k = key.trim().toLowerCase();
-            return k === DEMO_CLIENT_KEY || DEMO_URL_ALIASES.has(k);
+            return k === SANDBOX_CLIENT_KEY || SANDBOX_CLIENT_ALIASES.has(k);
         }
         /** Outreach-only UI: no appointments/ROI/conversion tiles; copy avoids booking/calendar framing */
         /** Bookmarks may use either spelling; used before /api/clients returns dashboardOutreachMode. */
@@ -7834,7 +7843,7 @@
         }
 
         function guessOutreachBriefForClient(clientKey) {
-            if (!clientKey || clientKey === DEMO_CLIENT_KEY || isDemoClientKey(clientKey)) return false;
+            if (!clientKey || clientKey === SANDBOX_CLIENT_KEY || isSandboxClientKey(clientKey)) return false;
             if (typeof window.__dashboardOutreachMode === 'boolean' && clientKey === currentClient) {
                 return window.__dashboardOutreachMode;
             }
@@ -9761,7 +9770,7 @@
                 const li = e.target && e.target.closest ? e.target.closest('[data-outreach-day]') : null;
                 if (!li || !host.contains(li)) return;
                 const dayKey = li.getAttribute('data-outreach-day') || '';
-                if (!dayKey || !currentClient || currentClient === DEMO_CLIENT_KEY) return;
+                if (!dayKey || !currentClient || currentClient === SANDBOX_CLIENT_KEY) return;
                 const detailsEl = document.getElementById('outreachScheduleDetails');
                 if (!detailsEl) return;
                 try {
@@ -10373,12 +10382,12 @@ ${actionsRow}
         }
         
         const CLIENT_CONFIG = {
-            demo_client: {
-                name: 'Demo Booking Partner',
-                description: 'Live sandbox showing the AI concierge following up + booking',
+            sandbox_client: {
+                name: 'Preview Booking Partner',
+                description: 'Sample workspace showing the AI concierge follow-up + booking flow',
                 tagline: 'Upload existing leads → AI calls in minutes → appointments land in your calendar.',
                 logo: '✨',
-                status: 'Demo Live',
+                status: 'Preview',
                 phone: '+44 20 3880 1234',
                 timezone: 'Europe/London',
                 businessHours: '8am - 8pm, 7 days/week',
@@ -10392,8 +10401,9 @@ ${actionsRow}
                 chart: [5, 7, 6, 9, 8, 10, 7]
             }
         };
+        CLIENT_CONFIG.demo_client = CLIENT_CONFIG.sandbox_client;
 
-        function generatePersonalizedDemoData(clientConfig) {
+        function generatePersonalizedSandboxData(clientConfig) {
             const businessName = clientConfig.displayName || 'Business';
             const services = clientConfig.services || ['Service'];
             const primaryService = services[0];
@@ -10456,8 +10466,8 @@ ${actionsRow}
             };
         }
 
-        /** Sandbox-only seed metrics / lists (?client=demo_client or demo aliases). Never loaded for d2d-xpress-tom or other live tenants. */
-        const DEMO_DATA = {
+        /** Sandbox-only seed metrics / lists (?client=sandbox_client or legacy demo URL aliases). Never loaded for live tenants. */
+        const SANDBOX_SEED_DATA = {
             totalLeads: 48,
             totalCalls: 36,
             last24hLeads: 7,
@@ -10534,14 +10544,14 @@ ${actionsRow}
             }
         };
 
-        const DEMO_INTEGRATIONS = [
+        const SANDBOX_INTEGRATIONS = [
             { name: 'Vapi Voice', status: 'active', detail: 'Assistant + phone number connected' },
             { name: 'Twilio SMS', status: 'active', detail: 'Messaging service verified' },
             { name: 'Google Calendar', status: 'active', detail: 'Auto-booking in sync' },
             { name: 'Slack Digest', status: 'warning', detail: 'Add webhook to enable daily summary' }
         ];
 
-        /** Real tenants (including Tom / d2d-xpress-tom): start empty until /api/client-dashboard/:key returns. DEMO_DATA is only for ?client=demo_client (and demo URL aliases). */
+        /** Real tenants (including Tom / d2d-xpress-tom): start empty until /api/client-dashboard/:key returns. SANDBOX_SEED_DATA is only for the sandbox preview key. */
         function createEmptyDashboardData() {
             return {
                 totalLeads: 0,
@@ -10696,7 +10706,7 @@ ${actionsRow}
         }
 
         async function runOutreachFullHydrate({ userInitiated = false } = {}) {
-            if (!currentClient || currentClient === DEMO_CLIENT_KEY) return false;
+            if (!currentClient || currentClient === SANDBOX_CLIENT_KEY) return false;
             if (!outreachBriefListPending || outreachFullHydrateInFlight) return false;
             outreachFullHydrateInFlight = true;
             const briefHint = document.getElementById('leadsBriefSyncHint');
@@ -10730,7 +10740,7 @@ ${actionsRow}
                     const chartCfg =
                         currentDashboardChartConfig ||
                         CLIENT_CONFIG[currentClient] ||
-                        CLIENT_CONFIG[DEMO_CLIENT_KEY] ||
+                        CLIENT_CONFIG[SANDBOX_CLIENT_KEY] ||
                         {};
                     renderChart(chartCfg, dashboardData);
                     renderCalls(dashboardData.recentCalls || []);
@@ -10952,7 +10962,7 @@ ${actionsRow}
         const DASHBOARD_DEFERRED_LOAD_FALLBACK_MS = 4500;
 
         function paintDeferredPanelPlaceholders() {
-            if (currentClient === DEMO_CLIENT_KEY) return;
+            if (currentClient === SANDBOX_CLIENT_KEY) return;
             const panels = [
                 ['call-recordings', 'Loading recordings…'],
                 ['voicemail-listener', 'Loading voicemails…'],
@@ -11127,8 +11137,8 @@ ${actionsRow}
         function getClientFromURL() {
             const params = new URLSearchParams(window.location.search);
             const clientParam = (params.get('client') || '').trim();
-            if (!clientParam || isDemoClientKey(clientParam)) {
-                return DEMO_CLIENT_KEY;
+            if (!clientParam || isSandboxClientKey(clientParam)) {
+                return SANDBOX_CLIENT_KEY;
             }
             return clientParam;
         }
@@ -11171,7 +11181,7 @@ ${actionsRow}
             const bustCache = options && options.bustCache === true;
             const brief = options && options.brief === true;
             const useEtag = options && options.useEtag === true;
-            if (clientKey !== DEMO_CLIENT_KEY) {
+            if (clientKey !== SANDBOX_CLIENT_KEY) {
                 try {
                     // Add timeout to prevent hanging
                     const controller = new AbortController();
@@ -11238,11 +11248,11 @@ ${actionsRow}
 
         /** Re-pull /api/client-dashboard after CRM mutations so KPI tiles match Postgres without waiting for the 60s poll. */
         async function refreshDashboardAfterMutation() {
-            if (!currentClient || currentClient === DEMO_CLIENT_KEY) return;
+            if (!currentClient || currentClient === SANDBOX_CLIENT_KEY) return;
             try {
                 const livePayload = await fetchLiveData(currentClient);
                 if (!livePayload || livePayload.ok !== true) return;
-                dashboardData = mergeData(dashboardData, livePayload, currentClient === DEMO_CLIENT_KEY);
+                dashboardData = mergeData(dashboardData, livePayload, currentClient === SANDBOX_CLIENT_KEY);
                 lastDashboardPollFingerprint = dashboardPollFingerprint(dashboardData);
                 dashboardLivePayloadFailed = false;
                 setDashboardApiErrorVisible(false);
@@ -11255,7 +11265,7 @@ ${actionsRow}
                 const chartCfg =
                     currentDashboardChartConfig ||
                     CLIENT_CONFIG[currentClient] ||
-                    CLIENT_CONFIG[DEMO_CLIENT_KEY] ||
+                    CLIENT_CONFIG[SANDBOX_CLIENT_KEY] ||
                     {};
                 renderChart(chartCfg, dashboardData);
                 renderAppointments(dashboardData.appointments || []);
@@ -11372,14 +11382,18 @@ ${actionsRow}
         let dashboardPollInFlight = false;
         let lastDashboardPollFingerprint = '';
 
-        function mergeData(base = {}, livePayload, isDemoClient = false) {
+        function mergeData(base = {}, livePayload, usesSandboxSeed = false) {
             if (!livePayload) return base;
             
-            // For real clients (every tenant except sandbox demo_client), use API payload only — no Sarah Patel–style seed data.
-            // Demo merge path: sandbox URL or leads explicitly tagged "(demo)" in status.
-            const isDemoMode = isDemoClient || (base.totalLeads > 0 && base.recentLeads && base.recentLeads.length > 0 && base.recentLeads.some(l => l.status && l.status.includes('(demo)')));
+            // Live tenants: API payload only. Sandbox preview may merge seed + optional API rows.
+            const usesSandboxSeedMode =
+                usesSandboxSeed ||
+                (base.totalLeads > 0 &&
+                    base.recentLeads &&
+                    base.recentLeads.length > 0 &&
+                    base.recentLeads.some((l) => l.status && l.status.includes('(sample)')));
             
-            if (!isDemoMode) {
+            if (!usesSandboxSeedMode) {
                 // Real client - use API data directly from livePayload
                 const metrics = livePayload.metrics || {};
                 const recentCalls = livePayload.recentCalls || [];
@@ -11428,11 +11442,15 @@ ${actionsRow}
                 };
             }
             
-            // Demo mode: merge with imported leads
+            // Sandbox preview: merge with imported leads
             const metrics = livePayload.metrics || {};
             const baseLeads = Array.isArray(base.recentLeads) ? base.recentLeads : [];
-            const importedLeads = baseLeads.filter(lead => lead.status && lead.status.includes('(demo)'));
-            const existingLeads = baseLeads.filter(lead => !lead.status || !lead.status.includes('(demo)'));
+            const importedLeads = baseLeads.filter(
+                (lead) => lead.status && (lead.status.includes('(sample)') || lead.status.includes('(demo)'))
+            );
+            const existingLeads = baseLeads.filter(
+                (lead) => !lead.status || (!lead.status.includes('(sample)') && !lead.status.includes('(demo)'))
+            );
             const newLeads = Array.isArray(livePayload.leads) && livePayload.leads.length ? livePayload.leads : [];
             
             // Merge: imported leads first, then new API leads, then existing non-imported leads
@@ -11662,11 +11680,11 @@ ${actionsRow}
             if (metaHours) metaHours.textContent = businessHours || 'Not supplied';
             if (metaIndustry) metaIndustry.textContent = industryDisplay || 'Not supplied';
 
-            const banner = document.getElementById('demoBanner');
+            const banner = document.getElementById('sandboxBanner');
             if (banner) {
-                if (config.key === DEMO_CLIENT_KEY) {
+                if (config.key === SANDBOX_CLIENT_KEY) {
                     banner.style.display = 'block';
-                    banner.innerHTML = `<strong>Demo environment:</strong> ${escapeHtml(config.name || config.displayName || 'Demo')} shows exactly what your live dashboard will look like. When we onboard you we simply plug in your data.`;
+                    banner.innerHTML = `<strong>Preview workspace:</strong> ${escapeHtml(config.name || config.displayName || 'Preview')} uses sample data. Live clients (like yours in production) load metrics from <code>/api/client-dashboard</code>.`;
                 } else {
                     banner.style.display = 'none';
                 }
@@ -12284,7 +12302,7 @@ ${actionsRow}
             const wrap = document.getElementById('roiSettingsWrap');
             const btn = document.getElementById('roiSaveBtn');
             if (!wrap || !btn) return;
-            if (currentClient === DEMO_CLIENT_KEY || !shouldShowRoiPanel(currentClient)) {
+            if (currentClient === SANDBOX_CLIENT_KEY || !shouldShowRoiPanel(currentClient)) {
                 wrap.style.display = 'none';
                 return;
             }
@@ -12493,7 +12511,7 @@ ${actionsRow}
             const hintEl = document.getElementById('leadsSearchHint');
             const filterQ = (searchEl && searchEl.value) ? searchEl.value.trim().toLowerCase() : '';
             const listCap = dashboardData.recentLeadsListCap ?? RECENT_LEADS_DASHBOARD_CAP;
-            const isDemo = currentClient === DEMO_CLIENT_KEY;
+            const isDemo = currentClient === SANDBOX_CLIENT_KEY;
             updateLeadsBriefSyncHintUi();
 
             if (!recentLeadsAllRows.length) {
@@ -12924,7 +12942,7 @@ ${actionsRow}
             if (statusCoverageEl) statusCoverageEl.textContent = config.businessHours || 'Not supplied';
             
             // Update SMS/Calendar status from integration health
-            if (currentClient !== DEMO_CLIENT_KEY) {
+            if (currentClient !== SANDBOX_CLIENT_KEY) {
                 try {
                     const response = await fetch(`${BASE_URL}/api/integration-health/${currentClient}`);
                     if (response.ok) {
@@ -13206,7 +13224,7 @@ ${actionsRow}
         function activityCallHasTranscript(call) {
             if (!call) return false;
             if (call.transcriptPreview && String(call.transcriptPreview).trim()) return true;
-            if (!currentClient || currentClient === DEMO_CLIENT_KEY || isDemoClientKey(currentClient)) {
+            if (!currentClient || currentClient === SANDBOX_CLIENT_KEY || isSandboxClientKey(currentClient)) {
                 const tid = String(call.callId || call.id || '').trim();
                 const demoKey = tid.replace(/^demo-call-/, 'demo-');
                 const withScript = new Set(['demo-1', 'demo-2', 'demo-3', 'demo-4', 'demo-5']);
@@ -13253,7 +13271,7 @@ ${actionsRow}
         }
 
         function buildActivityRecordingHref(call) {
-            if (!call || currentClient === DEMO_CLIENT_KEY || isDemoClientKey(currentClient)) return '';
+            if (!call || currentClient === SANDBOX_CLIENT_KEY || isSandboxClientKey(currentClient)) return '';
             const raw = (call.recordingUrl && String(call.recordingUrl).trim()) || '';
             if (!raw) return '';
             if (/^https?:\/\//i.test(raw)) return raw;
@@ -13265,7 +13283,7 @@ ${actionsRow}
         function updateActivityFeedLiveBadge() {
             const el = document.getElementById('activityFeedLiveBadge');
             if (!el) return;
-            if (currentClient === DEMO_CLIENT_KEY || isDemoClientKey(currentClient) || !liveEventSource) {
+            if (currentClient === SANDBOX_CLIENT_KEY || isSandboxClientKey(currentClient) || !liveEventSource) {
                 el.hidden = true;
                 return;
             }
@@ -14494,7 +14512,7 @@ ${actionsRow}
                 filter: activityFeedOutcomeFilter
             });
 
-            if (callsToShow.length === 0 && currentClient === DEMO_CLIENT_KEY) {
+            if (callsToShow.length === 0 && currentClient === SANDBOX_CLIENT_KEY) {
                 const ago = (m) => new Date(Date.now() - m * 60 * 1000).toISOString();
                 callsToShow = [
                     { id: 'demo-1', callId: 'demo-call-1', dbId: 9001, name: 'Sarah Patel', leadPhone: '+447700900111', service: 'Lead Follow-Up', summary: 'Booked Tuesday 2:30pm — calendar invite sent to prospect.', channel: 'Phone', timeAgo: '2 min ago', createdAt: ago(2), outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '3m 12s', transcriptPreview: 'User confirmed Tuesday 2:30pm works; sending calendar invite now.', endedReason: 'Assistant ended call after confirmation', retryAttempt: 0, hasRecording: true },
@@ -14524,7 +14542,7 @@ ${actionsRow}
             }
 
             let working = callsToShow.filter((c) => activityCallMatchesOutcomeChip(c, activityFeedOutcomeFilter));
-            if (currentClient !== DEMO_CLIENT_KEY) {
+            if (currentClient !== SANDBOX_CLIENT_KEY) {
                 working = consolidateActivityCalls(working);
             }
 
@@ -14986,7 +15004,7 @@ ${actionsRow}
             contentEl.textContent = 'Loading transcript...';
             modal.classList.add('open');
 
-            const isDemo = !currentClient || currentClient === DEMO_CLIENT_KEY || isDemoClientKey(currentClient);
+            const isDemo = !currentClient || currentClient === SANDBOX_CLIENT_KEY || isSandboxClientKey(currentClient);
             
             if (isDemo) {
                 // Show realistic demo transcripts based on call ID
@@ -15131,7 +15149,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const subtitleEl = document.getElementById('activeSubtitle');
             if (!titleEl || !subtitleEl) return;
 
-            if (currentClient === DEMO_CLIENT_KEY) {
+            if (currentClient === SANDBOX_CLIENT_KEY) {
                 const activeCalls = Math.floor((data.totalCalls || 0) * 0.1) || 0;
                 const activeFollowups = Math.floor((data.totalLeads || 0) * 0.3) || 0;
                 
@@ -15162,7 +15180,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const container = document.getElementById('call-quality');
             if (!container) return;
 
-            if (currentClient === DEMO_CLIENT_KEY) {
+            if (currentClient === SANDBOX_CLIENT_KEY) {
                 const m = data.metrics || {};
                 const attempts = m.totalCallAttempts || data.totalCalls || 48;
                 const answeredAtt = Math.min(attempts, Math.max(12, Math.floor(attempts * 0.42)));
@@ -15638,7 +15656,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (!btn || btn.__wired) return;
                 btn.__wired = true;
                 btn.addEventListener('click', async () => {
-                    if (!clientKey || isDemoClientKey(clientKey)) return;
+                    if (!clientKey || isSandboxClientKey(clientKey)) return;
                     btn.disabled = true;
                     btn.textContent = 'Refreshing…';
                     try {
@@ -15668,14 +15686,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 let bandit;
                 if (data && data._insightsPayload) {
                     payload = data._insightsPayload;
-                    bandit = isDemoClientKey(clientKey)
+                    bandit = isSandboxClientKey(clientKey)
                         ? demoCallTimeBanditPayload()
                         : await fetch(banditUrl, { cache: 'no-store' })
                               .then((r) => r.json())
                               .catch(() => ({ ok: false, ranked: [] }));
                 } else {
                     const insightPromise = fetch(insightsUrl, { cache: 'no-store' }).then((r) => r.json());
-                    const banditPromise = isDemoClientKey(clientKey)
+                    const banditPromise = isSandboxClientKey(clientKey)
                         ? Promise.resolve(demoCallTimeBanditPayload())
                         : fetch(banditUrl, { cache: 'no-store' })
                               .then((r) => r.json())
@@ -15828,7 +15846,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const barHost = document.getElementById('retryQueueBarHost');
             if (!container) return;
 
-            if (currentClient === DEMO_CLIENT_KEY) {
+            if (currentClient === SANDBOX_CLIENT_KEY) {
                 const totalCalls = data.totalCalls || 0;
                 const failedCalls = Math.floor(totalCalls * 0.15);
 
@@ -18912,7 +18930,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const barHost = document.getElementById('callRecordingsBarHost');
             if (!container) return;
 
-            if (currentClient === DEMO_CLIENT_KEY) {
+            if (currentClient === SANDBOX_CLIENT_KEY) {
                 callRecordingsOutcomeFilter = 'all';
                 const searchEl = document.getElementById('callRecordingsSearchInput');
                 if (searchEl) searchEl.value = '';
@@ -19032,7 +19050,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const hintEl = document.getElementById('voicemailSearchHint');
             if (!container) return;
 
-            if (currentClient === DEMO_CLIENT_KEY) {
+            if (currentClient === SANDBOX_CLIENT_KEY) {
                 voicemailRowsAll = (callRecordingsAll || []).filter((r) => String(r.outcome || '').toLowerCase() === 'voicemail').slice(0, 12);
                 container.innerHTML = voicemailRowsAll.length
                     ? voicemailRowsAll.map((rec) => {
@@ -19145,7 +19163,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 return;
             }
 
-            if (currentClient === DEMO_CLIENT_KEY) {
+            if (currentClient === SANDBOX_CLIENT_KEY) {
                 const lastSync = new Date(Date.now() - 5 * 60 * 1000);
                 const conflictsResolved = Math.floor((data.bookingsThisWeek || 0) * 0.1);
                 const appointmentsBooked = data.bookingsThisWeek || 0;
@@ -19220,7 +19238,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
         
         async function exportData(type) {
-            if (currentClient === DEMO_CLIENT_KEY) {
+            if (currentClient === SANDBOX_CLIENT_KEY) {
                 showToast('Export Ready', `Demo data export for ${type} would download here.`, 'info');
                 return;
             }
@@ -19302,7 +19320,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         function startLiveEvents(clientKey) {
-            if (!window.EventSource || clientKey === DEMO_CLIENT_KEY) {
+            if (!window.EventSource || clientKey === SANDBOX_CLIENT_KEY) {
                 stopLiveEvents();
                 return;
             }
@@ -19392,7 +19410,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         async function fetchClientConfigForDashboard(clientKey) {
-            if (!clientKey || clientKey === DEMO_CLIENT_KEY) return null;
+            if (!clientKey || clientKey === SANDBOX_CLIENT_KEY) return null;
             try {
                 const response = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(clientKey)}`, { cache: 'no-store' });
                 if (!response.ok) return null;
@@ -19446,9 +19464,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             let outreachBriefHydrate = false;
             const guessBriefBoot = guessOutreachBriefForClient(currentClient);
 
-            if (currentClient !== DEMO_CLIENT_KEY) {
+            if (currentClient !== SANDBOX_CLIENT_KEY) {
                 dashboardData = createEmptyDashboardData();
-                const banner = document.getElementById('demoBanner');
+                const banner = document.getElementById('sandboxBanner');
                 if (banner) banner.style.display = 'none';
                 try {
                     updateStatusBar(dashboardData);
@@ -19500,7 +19518,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             
             // Use clientConfig if available, otherwise use CLIENT_CONFIG but only for non-meta fields
             // Meta fields (phone, timezone, businessHours, industry) should only come from actual client config
-            const config = clientConfig || CLIENT_CONFIG[currentClient] || CLIENT_CONFIG[DEMO_CLIENT_KEY] || {};
+            const config = clientConfig || CLIENT_CONFIG[currentClient] || CLIENT_CONFIG[SANDBOX_CLIENT_KEY] || {};
             config.key = currentClient;
             
             // Debug: Log what we have
@@ -19582,10 +19600,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (container) showSkeleton(container, id === 'recent-activity' ? 'metrics' : 'list');
             });
 
-            if (currentClient === DEMO_CLIENT_KEY) {
-                dashboardData = { ...DEMO_DATA };
-                const demoBanner = document.getElementById('demoBanner');
-                if (demoBanner) demoBanner.style.display = 'block';
+            if (currentClient === SANDBOX_CLIENT_KEY) {
+                dashboardData = { ...SANDBOX_SEED_DATA };
+                const sandboxBanner = document.getElementById('sandboxBanner');
+                if (sandboxBanner) sandboxBanner.style.display = 'block';
                 stopLiveEvents();
                 try {
                     const livePayload = await fetchLiveData(currentClient, { brief: false });
@@ -19593,11 +19611,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         dashboardData = mergeData(dashboardData, livePayload, true);
                     }
                 } catch (error) {
-                    console.warn('[DASHBOARD] demo live fetch failed', error);
+                    console.warn('[DASHBOARD] sandbox preview live fetch failed', error);
                 }
             }
 
-            if (currentClient !== DEMO_CLIENT_KEY && outreachBriefHydrate) {
+            if (currentClient !== SANDBOX_CLIENT_KEY && outreachBriefHydrate) {
                 if (!dashboardDeferEnabled()) {
                     runOutreachFullHydrate({ userInitiated: false });
                 } else {
@@ -19618,7 +19636,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 prefillRoiSettingsInputs();
                 initRoiSettingsPanel();
             }
-            if (currentClient === DEMO_CLIENT_KEY) {
+            if (currentClient === SANDBOX_CLIENT_KEY) {
                 loadLeadsFunnelSegmentForClient(currentClient);
                 syncLeadsFunnelChipUi();
             }
@@ -19632,7 +19650,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             renderWorkflow(
                 isOutreachDashboardClient(currentClient)
                     ? []
-                    : (config.customWorkflow || config.workflow || CLIENT_CONFIG.demo_client.workflow)
+                    : (config.customWorkflow || config.workflow || CLIENT_CONFIG.sandbox_client.workflow)
             );
             lastDashboardPollFingerprint = dashboardPollFingerprint(dashboardData);
             
@@ -19700,7 +19718,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         renderChart(config, dashboardData);
                         syncDashboardFreshnessUi();
                         updateLeadsBriefSyncHintUi();
-                    } else if (currentClient !== DEMO_CLIENT_KEY) {
+                    } else if (currentClient !== SANDBOX_CLIENT_KEY) {
                         dashboardLivePayloadFailed = true;
                         setDashboardApiErrorVisible(true, lastDashboardFetchError);
                         syncDashboardFreshnessUi();
@@ -19927,7 +19945,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
             // Try to get full client config if not already loaded
             let fullConfig = config;
-            if (clientKey && clientKey !== DEMO_CLIENT_KEY && (!config?.vapi?.assistantId && !config?.assistantId)) {
+            if (clientKey && clientKey !== SANDBOX_CLIENT_KEY && (!config?.vapi?.assistantId && !config?.assistantId)) {
                 try {
                     const response = await fetch(`${BASE_URL}/api/clients/${clientKey}`);
                     if (response.ok) {
@@ -19944,8 +19962,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             // Show button for demo clients or clients with isDemo flag
             // Also check if client has a VAPI assistant ID (likely a demo)
             const hasAssistantId = fullConfig?.vapi?.assistantId || fullConfig?.assistantId;
-            const isDemo = clientKey === DEMO_CLIENT_KEY ||
-                         isDemoClientKey(clientKey) ||
+            const isDemo = clientKey === SANDBOX_CLIENT_KEY ||
+                         isSandboxClientKey(clientKey) ||
                          fullConfig?.isDemo === true;
 
             console.log('[TEST CALL] Client check:', {
@@ -19957,9 +19975,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 assistantId: fullConfig?.assistantId
             });
 
-            // Show button if it's a demo client OR if it has an assistant ID (for testing)
-            // Also show if clientKey exists (not the default demo_client) - means it's a real demo client
-            const shouldShow = isDemo || hasAssistantId || (clientKey && clientKey !== DEMO_CLIENT_KEY);
+            // Show button for sandbox preview or any tenant with a test-call assistant configured
+            const shouldShow = isDemo || hasAssistantId || (clientKey && clientKey !== SANDBOX_CLIENT_KEY);
             
             if (shouldShow) {
                 testCallBtn.style.display = 'block';
@@ -20083,7 +20100,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const lead = recentLeadsAllRows[fullIdx];
             if (!lead) return;
 
-            if (currentClient === DEMO_CLIENT_KEY || !lead.id) {
+            if (currentClient === SANDBOX_CLIENT_KEY || !lead.id) {
                 applyLocalLeadAction(lead, action);
                 recentLeadsAllRows[fullIdx] = lead;
                 dashboardData.recentLeads = recentLeadsAllRows;
@@ -20310,7 +20327,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         if (playBtn.disabled) return;
                         const url = (playBtn.getAttribute('data-rec-url') || '').trim();
                         const name = playBtn.getAttribute('data-rec-name') || 'Prospect';
-                        if (currentClient === DEMO_CLIENT_KEY || isDemoClientKey(currentClient)) {
+                        if (currentClient === SANDBOX_CLIENT_KEY || isSandboxClientKey(currentClient)) {
                             showToast('Recording Playback', `Demo recording for ${name} would play here`, 'info');
                             return;
                         }
@@ -20812,7 +20829,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const outreachDedupe =
                 typeof isOutreachDashboardClient === 'function' &&
                 isOutreachDashboardClient(currentClient) &&
-                currentClient !== DEMO_CLIENT_KEY;
+                currentClient !== SANDBOX_CLIENT_KEY;
 
             const mappingParts = [
                 mapping.phone ? `phone → “${escapeHtml(mapping.phone)}”` : 'phone → (not detected)',
@@ -21043,7 +21060,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             
             console.log('[LEAD IMPORT] Current client:', currentClient, 'URL:', window.location.href);
             
-            if (currentClient === DEMO_CLIENT_KEY) {
+            if (currentClient === SANDBOX_CLIENT_KEY) {
                 const demoLeads = leads.map((lead, idx) => {
                     const n = normalizePhoneCandidate(lead.phone || '');
                     const phone = n.ok ? n.normalized : String(lead.phone || '').trim();
@@ -21073,7 +21090,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 return;
             }
             try {
-                if (!currentClient || currentClient === DEMO_CLIENT_KEY) {
+                if (!currentClient || currentClient === SANDBOX_CLIENT_KEY) {
                     throw new Error('Client key is required. Please access the dashboard with a valid client key in the URL (?client=your-client-key)');
                 }
                 
@@ -21346,8 +21363,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         async function loadIntegrationHealth(clientKey) {
             if (isOutreachDashboardClient(clientKey)) return;
-            if (clientKey === DEMO_CLIENT_KEY) {
-                renderIntegrationStatus(DEMO_INTEGRATIONS);
+            if (clientKey === SANDBOX_CLIENT_KEY) {
+                renderIntegrationStatus(SANDBOX_INTEGRATIONS);
                 return;
             }
             try {

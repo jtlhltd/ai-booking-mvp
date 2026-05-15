@@ -7,6 +7,7 @@ const DASHBOARD_HTML = path.join(process.cwd(), 'public', 'client-dashboard.html
 describe('outreach dashboard load policy (static guard)', () => {
   test('parallel boot uses brief client-dashboard API with outreach fallback keys', () => {
     const html = fs.readFileSync(DASHBOARD_HTML, 'utf8');
+    expect(html).toMatch(/SANDBOX_CLIENT_KEY\s*=\s*'sandbox_client'/);
     expect(html).toMatch(/OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK\s*=\s*\[[^\]]*d2d-xpress-tom/);
     expect(html).toMatch(/guessOutreachBriefForClient\(currentClient\)/);
     expect(html).toMatch(/\/api\/client-dashboard\//);

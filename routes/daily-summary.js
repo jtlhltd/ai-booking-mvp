@@ -1,5 +1,6 @@
 import express from 'express';
 import { DateTime } from 'luxon';
+import { isSandboxClientKey } from '../lib/sandbox-client-keys.js';
 
 export function createDailySummaryRouter(deps) {
   const {
@@ -14,9 +15,9 @@ export function createDailySummaryRouter(deps) {
 
   const router = express.Router();
 
-  function isFollowUpQueueDemoClient(clientKey) {
+  function isFollowUpQueueSandboxClient(clientKey) {
     const k = String(clientKey || '').toLowerCase().trim();
-    return k === 'demo_client' || k === 'demo-client' || k === 'stay-focused-fitness-chris';
+    return isSandboxClientKey(k) || k === 'stay-focused-fitness-chris';
   }
 
   router.get('/daily-summary/:clientKey', async (req, res) => {
@@ -224,7 +225,7 @@ export function createDailySummaryRouter(deps) {
         // Non-fatal: summary still useful with follow-up sheet only
       }
 
-      if (isFollowUpQueueDemoClient(clientKey)) {
+      if (isFollowUpQueueSandboxClient(clientKey)) {
         const demoTz = 'Europe/London';
         const demoRows = [
           {

@@ -6,14 +6,15 @@ import {
   matchesDashboardCohort,
   normalizeDashboardCohortFilter,
 } from '../lib/dashboard-follow-up-filters.js';
+import { isSandboxClientKey } from '../lib/sandbox-client-keys.js';
 
 export function createFollowUpQueueRouter(deps) {
   const { getFullClient, resolveLogisticsSpreadsheetId, sheets, query, phoneMatchKey } = deps || {};
   const router = express.Router();
 
-  function isFollowUpQueueDemoClient(clientKey) {
+  function isFollowUpQueueSandboxClient(clientKey) {
     const k = String(clientKey || '').toLowerCase().trim();
-    return k === 'demo_client' || k === 'demo-client' || k === 'stay-focused-fitness-chris';
+    return isSandboxClientKey(k) || k === 'stay-focused-fitness-chris';
   }
 
   async function applyDashboardCohortFilter(clientKey, client, records, filter) {
@@ -74,7 +75,7 @@ export function createFollowUpQueueRouter(deps) {
       const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
       const filter = normalizeDashboardCohortFilter(req.query.filter);
 
-      if (isFollowUpQueueDemoClient(clientKey)) {
+      if (isFollowUpQueueSandboxClient(clientKey)) {
         const demoRows = [
           {
             Timestamp: new Date(Date.now() - 2 * 3600000).toLocaleString('en-GB', {
@@ -252,7 +253,7 @@ export function createFollowUpQueueRouter(deps) {
         return out;
       }
 
-      if (isFollowUpQueueDemoClient(clientKey)) {
+      if (isFollowUpQueueSandboxClient(clientKey)) {
         const demoRows = [
           {
             Timestamp: new Date(Date.now() - 2 * 3600000).toLocaleString('en-GB', {
