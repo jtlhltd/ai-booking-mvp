@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import { dismissSequenceSalvageForLead, stopOutboundSequenceForLead } from '../lib/outbound-sequence-ops.js';
-import { setLeadOutboundSequenceEnrollment } from '../lib/outbound-sequence-enrollment.js';
+import {
+  MAX_OUTBOUND_SEQUENCE_ENROLLMENT_BULK,
+  setLeadOutboundSequenceEnrollment,
+  setLeadsOutboundSequenceEnrollmentBulk,
+} from '../lib/outbound-sequence-enrollment.js';
 
 export function createClientOpsRouter(deps) {
   const {
@@ -410,6 +414,53 @@ export function createClientOpsRouter(deps) {
       return res.json(out);
     } catch (error) {
       console.error('[OUTBOUND SEQUENCE ENROLLMENT ERROR]', error);
+      return res.status(500).json({ ok: false, error: error.message || String(error) });
+    }
+  });
+
+  router.post('/api/clients/:clientKey/outbound-sequence/enrollment/bulk', async (req, res) => {
+    const { clientKey } = req.params;
+    if (!hasOperatorApiKey(req)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    try {
+      const leadPhones = Array.isArray(req.body?.leadPhones) ? req.body.leadPhones : [];
+      const actor = String(req.body?.actor || 'operator').trim() || 'operator';
+      if (req.body?.enrolled == null) {
+        return res.status(400).json({ ok: false, error: 'enrolled is required (boolean)' });
+      }
+      if (!leadPhones.length) {
+        return res.status(400).json({ ok: false, error: 'leadPhones must be a non-empty array' });
+      }
+      const out = await setLeadsOutboundSequenceEnrollmentBulk({
+        clientKey,
+        leadPhones,
+        enrolled: req.body.enrolled,
+        actor,
+        maxItems: MAX_OUTBOUND_SEQUENCE_ENROLLMENT_BULK,
+        query,
+        getFullClient,
+        isPostgres: !!isPostgres,
+        getLeadSequenceState,
+        updateLeadSequenceState,
+        getCallQueueByPhone,
+        updateCallQueueStatus,
+        getLeadHandoffByPhone,
+        upsertLeadHandoff,
+      });
+      if (out.error === 'tenant_sequence_disabled') {
+        return res.status(409).json({ ok: false, error: out.error });
+      }
+      if (out.error === 'no_lead_phones' || out.error === 'missing_client_key') {
+        return res.status(400).json({ ok: false, error: out.error });
+      }
+      if (!out.ok) {
+        const status = out.error === 'tenant_sequence_disabled' ? 409 : 400;
+        return res.status(status).json({ ok: false, error: out.error, ...out });
+      }
+      return res.status(out.partial ? 207 : 200).json(out);
+    } catch (error) {
+      console.error('[OUTBOUND SEQUENCE BULK ENROLLMENT ERROR]', error);
       return res.status(500).json({ ok: false, error: error.message || String(error) });
     }
   });

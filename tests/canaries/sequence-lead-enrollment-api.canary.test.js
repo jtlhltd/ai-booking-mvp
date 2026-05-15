@@ -9,13 +9,17 @@ import path from 'node:path';
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 describe('canary: sequence.lead-enrollment-operator-api', () => {
+  // intent: sequence.lead-enrollment-bulk-api
   test('client-ops mount and dashboard expose enrollment mutation', () => {
     const opsMount = readFileSync(path.join(repoRoot, 'routes/client-ops-mount.js'), 'utf8');
     const dashboard = readFileSync(path.join(repoRoot, 'public/client-dashboard.html'), 'utf8');
     expect(opsMount).toMatch(/outbound-sequence\/enrollment/);
-    expect(opsMount).toMatch(/setLeadOutboundSequenceEnrollment/);
-    expect(dashboard).toMatch(/outbound-sequence\/enrollment/);
+    expect(opsMount).toMatch(/outbound-sequence\/enrollment\/bulk/);
+    expect(opsMount).toMatch(/setLeadsOutboundSequenceEnrollmentBulk/);
+    expect(dashboard).toMatch(/outbound-sequence\/enrollment\/bulk/);
     expect(dashboard).toMatch(/data-seq-enroll/);
     expect(dashboard).toMatch(/data-seq-unenroll/);
+    expect(dashboard).toMatch(/data-seq-bulk-enroll/);
+    expect(dashboard).toMatch(/data-fu-bulk="seq-enroll"/);
   });
 });

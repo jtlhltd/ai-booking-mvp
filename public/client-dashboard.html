@@ -7247,6 +7247,13 @@
 
                         <div class="outbound-seq-pane">
                             <div class="outbound-seq-pane__label">Recently updated sequences</div>
+                            <div class="follow-up-status-filters" id="outboundSequenceBulkActions" role="group" aria-label="Bulk multi-call enrollment for selected sequence leads">
+                                <span id="outboundSequenceSelectedCount" class="dashboard-search-hint" hidden></span>
+                                <button type="button" class="export-btn secondary" data-seq-bulk-select-all title="Select every lead shown in this list">Select visible</button>
+                                <button type="button" class="export-btn secondary" data-seq-bulk-clear title="Clear selection">Clear</button>
+                                <button type="button" class="export-btn secondary" data-seq-bulk-enroll title="Enroll selected leads in multi-call">Enroll selected</button>
+                                <button type="button" class="export-btn secondary" data-seq-bulk-unenroll title="Remove selected leads from multi-call">Unenroll selected</button>
+                            </div>
                             <div id="outboundSequenceRecentList" class="thin-scroll outbound-seq-list"></div>
                         </div>
                     </div>
@@ -7519,6 +7526,8 @@
                         <button type="button" class="export-btn secondary" data-fu-bulk="todo" title="Set selected rows to To Call">Bulk To Call</button>
                         <button type="button" class="export-btn secondary" data-fu-bulk="called" title="Set selected rows to Called">Bulk Called</button>
                         <button type="button" class="export-btn secondary" data-fu-bulk="quoted" title="Set selected rows to Quoted">Bulk Quoted</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="seq-enroll" title="Enroll selected leads in multi-call">Bulk multi-call enroll</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="seq-unenroll" title="Remove selected leads from multi-call">Bulk multi-call unenroll</button>
                     </div>
                     <label class="follow-up-page-size" title="Disposition filter" style="display:inline-flex;gap:6px;align-items:center;">
                         <span class="sr-only">Disposition filter</span>
@@ -9287,6 +9296,8 @@
                         : (handoff.summaryText || handoff.operatorNotes || lead.notes || '');
                     const summary = outboundSequenceShortText(summarySource, 150);
                     const actions = outboundSequenceJourneyActionsHtml({ phone, leadId: lead.id, title });
+                    const bulkKey = outboundSequencePhoneKey(phone);
+                    const bulkChecked = bulkKey && outboundSequenceSelectedPhones.has(bulkKey);
                     return `
                         <div
                             class="outbound-seq-row"
@@ -9296,6 +9307,9 @@
                             aria-pressed="${selected ? 'true' : 'false'}"
                             >
                             <div class="outbound-seq-row__top">
+                                <label class="outbound-seq-row__select" style="display:flex;align-items:flex-start;gap:8px;margin-right:8px;" title="Select for bulk multi-call actions">
+                                    <input type="checkbox" data-seq-select="1" data-seq-phone="${escapeHtml(phone)}" ${bulkChecked ? 'checked' : ''} aria-label="Select ${escapeHtml(title)} for bulk actions" />
+                                </label>
                                 <div style="min-width:0;flex:1;">
                                     <div><strong>${escapeHtml(title)}</strong></div>
                                     ${titleLine}
@@ -9317,6 +9331,7 @@
                     `;
                 }).join('')}
             `;
+            outboundSequenceUpdateBulkSelectionUi();
         }
 
         function renderOutboundSequenceLeadDetail(payload) {
@@ -9674,8 +9689,51 @@
                     lookupBtn?.click();
                 });
             }
+            const seqBulkBar = document.getElementById('outboundSequenceBulkActions');
+            if (seqBulkBar && !seqBulkBar.dataset.bound) {
+                seqBulkBar.dataset.bound = '1';
+                seqBulkBar.addEventListener('click', async (e) => {
+                    const selectAllBtn = e.target.closest('[data-seq-bulk-select-all]');
+                    if (selectAllBtn) {
+                        for (const r of outboundSequenceRecentRows || []) {
+                            const p = outboundSequencePhoneKey(r?.leadPhone || '');
+                            if (p) outboundSequenceSelectedPhones.add(p);
+                        }
+                        renderOutboundSequenceRecentList(outboundSequenceRecentRows);
+                        return;
+                    }
+                    const clearBtn = e.target.closest('[data-seq-bulk-clear]');
+                    if (clearBtn) {
+                        outboundSequenceSelectedPhones.clear();
+                        renderOutboundSequenceRecentList(outboundSequenceRecentRows);
+                        return;
+                    }
+                    const enrollBtn = e.target.closest('[data-seq-bulk-enroll]');
+                    const unenrollBtn = e.target.closest('[data-seq-bulk-unenroll]');
+                    if (enrollBtn || unenrollBtn) {
+                        const phones = [...outboundSequenceSelectedPhones].map((k) => {
+                            const hit = (outboundSequenceRecentRows || []).find(
+                                (r) => outboundSequencePhoneKey(r?.leadPhone || '') === k
+                            );
+                            return hit?.leadPhone || k;
+                        });
+                        await applyOutboundSequenceEnrollmentBulk(phones, !!enrollBtn);
+                    }
+                });
+            }
             if (recent) {
                 recent.addEventListener('click', async (e) => {
+                    const selectCb = e.target.closest('[data-seq-select]');
+                    if (selectCb) {
+                        e.stopPropagation();
+                        const phone = selectCb.getAttribute('data-seq-phone') || '';
+                        const key = outboundSequencePhoneKey(phone);
+                        if (!key) return;
+                        if (selectCb.checked) outboundSequenceSelectedPhones.add(key);
+                        else outboundSequenceSelectedPhones.delete(key);
+                        outboundSequenceUpdateBulkSelectionUi();
+                        return;
+                    }
                     const historyBtn = e.target.closest('[data-seq-history]');
                     if (historyBtn) {
                         e.preventDefault();
@@ -14968,7 +15026,7 @@ ${actionsRow}
             if (res.status === 401) {
                 try { sessionStorage.removeItem('dash.operatorApiKey'); } catch {}
             }
-            if (!res.ok || data?.ok === false) {
+            if (!res.ok || (data?.ok === false && !data?.partial)) {
                 throw new Error(data?.error || data?.message || `HTTP ${res.status}`);
             }
             return data;
@@ -16432,7 +16490,73 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         let dashboardCohortFilter = 'all'; // all | classic | sequence | stopped | abandoned
         let outboundSequenceSelectedPhone = '';
         let outboundSequenceRecentRows = [];
+        const outboundSequenceSelectedPhones = new Set();
         const followUpSelectedKeys = new Set();
+
+        function outboundSequencePhoneKey(phone) {
+            return followUpNormalizePhoneKey(phone) || String(phone || '').trim();
+        }
+
+        function outboundSequenceUpdateBulkSelectionUi() {
+            const el = document.getElementById('outboundSequenceSelectedCount');
+            if (!el) return;
+            const n = outboundSequenceSelectedPhones.size;
+            if (!n) {
+                el.hidden = true;
+                el.textContent = '';
+                return;
+            }
+            el.hidden = false;
+            el.textContent = `${formatNumber(n)} selected`;
+        }
+
+        async function applyOutboundSequenceEnrollmentBulk(leadPhones, enrolled) {
+            const phones = [...new Set((Array.isArray(leadPhones) ? leadPhones : []).map((p) => String(p || '').trim()).filter(Boolean))];
+            if (!phones.length) {
+                showToast('No selection', 'Select at least one lead with a phone number.', 'error', 2500);
+                return;
+            }
+            const label = enrolled ? 'Bulk enroll in multi-call' : 'Bulk remove from multi-call';
+            try {
+                const res = await postOperatorClientAction(
+                    `/api/clients/${encodeURIComponent(currentClient)}/outbound-sequence/enrollment/bulk`,
+                    { leadPhones: phones, enrolled: !!enrolled, actor: 'operator' },
+                    label
+                );
+                const updated = Number(res?.updated) || 0;
+                const failed = Number(res?.failed) || 0;
+                const tone = failed > 0 ? (updated > 0 ? 'warning' : 'error') : 'success';
+                showToast(
+                    enrolled ? 'Bulk enroll complete' : 'Bulk unenroll complete',
+                    failed > 0
+                        ? `${formatNumber(updated)} updated, ${formatNumber(failed)} failed.`
+                        : `${formatNumber(updated)} lead(s) updated.`,
+                    tone,
+                    4500
+                );
+                const focusPhone = phones[0] || outboundSequenceSelectedPhone;
+                await refreshOutboundSequenceWindow(currentClient, { phoneLookup: focusPhone });
+                await loadFollowUpQueue(currentClient, { page: followUpQueuePage || 1, silent: false });
+            } catch (err) {
+                showToast(
+                    enrolled ? 'Bulk enroll failed' : 'Bulk unenroll failed',
+                    err?.message || 'Could not update multi-call enrollment.',
+                    'error',
+                    4000
+                );
+            }
+        }
+
+        function followUpPhonesFromSelection() {
+            const keySet = new Set(followUpSelectedKeys);
+            const phones = [];
+            for (const r of followUpQueueState.rawRows || []) {
+                if (!keySet.has(followUpRowKey(r))) continue;
+                const p = String(r.Phone || r.phone || '').trim();
+                if (p) phones.push(p);
+            }
+            return [...new Set(phones)];
+        }
 
         function dashboardCohortFilterLabel(value) {
             const v = String(value || '').trim().toLowerCase();
@@ -17520,6 +17644,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (k === 'spoke') return { Status: 'Called', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
                 return null;
             };
+            if (kind === 'seq-enroll') {
+                applyOutboundSequenceEnrollmentBulk(followUpPhonesFromSelection(), true);
+                return;
+            }
+            if (kind === 'seq-unenroll') {
+                applyOutboundSequenceEnrollmentBulk(followUpPhonesFromSelection(), false);
+                return;
+            }
+
             const patch = mapAction(kind);
             if (!patch) return;
 
