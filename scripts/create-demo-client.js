@@ -33,6 +33,8 @@ import { init, getFullClient, upsertFullClient } from '../db.js';
 import { onboardClient, cloneVapiAssistant, updateClientConfig } from '../lib/client-onboarding.js';
 
 const execAsync = promisify(exec);
+const SANDBOX_CLIENT_KEY = 'sandbox_client';
+/** @deprecated use SANDBOX_CLIENT_KEY; kept for existing DB rows and scripts */
 const DEMO_CLIENT_KEY = 'demo-client';
 const VAPI_API_URL = 'https://api.vapi.ai';
 const DEMO_HISTORY_FILE = path.join(process.cwd(), 'demos', '.demo-history.json');

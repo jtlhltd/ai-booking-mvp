@@ -1,14 +1,16 @@
 /**
- * Core API: demo client test call trigger.
+ * Client test call trigger (Vapi).
  *
- * POST /api/demo/test-call
+ * POST /api/client/test-call
+ * Legacy: POST /api/demo/test-call
  */
 import { Router } from 'express';
+import { isSandboxTenant } from '../lib/sandbox-client-keys.js';
 
 /**
  * @param {{
  *   getFullClient: (clientKey: string) => Promise<any>,
- *   isDemoClient: (client: any) => boolean,
+ *   isDemoClient?: (client: any) => boolean,
  *   fetchImpl?: typeof fetch
  * }} deps
  */
@@ -16,8 +18,10 @@ export function createDemoTestCallRouter(deps) {
   const { getFullClient, isDemoClient, fetchImpl } = deps || {};
   const router = Router();
   const fetchFn = fetchImpl || globalThis.fetch;
+  const isPreviewTenant = (client) =>
+    (typeof isDemoClient === 'function' && isDemoClient(client)) || isSandboxTenant(client);
 
-  router.post('/demo/test-call', async (req, res) => {
+  const handler = async (req, res) => {
     try {
       const { clientKey, assistantId } = req.body || {};
 
@@ -30,11 +34,11 @@ export function createDemoTestCallRouter(deps) {
         return res.status(404).json({ success: false, error: 'Client not found' });
       }
 
-      const isDemo = isDemoClient(client);
+      const isPreview = isPreviewTenant(client);
       const hasAssistantId = client.vapi?.assistantId || client.assistantId;
 
-      if (!isDemo && !hasAssistantId) {
-        return res.status(403).json({ success: false, error: 'Test calls only available for demo clients' });
+      if (!isPreview && !hasAssistantId) {
+        return res.status(403).json({ success: false, error: 'Test calls require a preview tenant or configured assistant' });
       }
 
       const finalAssistantId = assistantId || client.vapi?.assistantId || client.assistantId;
@@ -83,10 +87,13 @@ export function createDemoTestCallRouter(deps) {
       const data = await response.json().catch(() => ({}));
       return res.json({ success: true, data });
     } catch (error) {
-      console.error('[DEMO TEST CALL ERROR]', error);
+      console.error('[CLIENT TEST CALL ERROR]', error);
       return res.status(500).json({ success: false, error: error.message });
     }
-  });
+  };
+
+  router.post('/client/test-call', handler);
+  router.post('/demo/test-call', handler);
 
   return router;
 }

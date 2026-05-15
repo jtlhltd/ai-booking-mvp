@@ -13,6 +13,7 @@ import {
   respondClientDashboard,
   setCachedClientDashboard
 } from '../lib/client-dashboard-response-cache.js';
+import { loadDashboardCallQualityPayload } from '../lib/dashboard-call-quality.js';
 import { sqlDaysAgo as sqlDaysAgoLib } from '../lib/sql-relative-interval.js';
 
 function applyDeprecatedClientDashboardHeaders(res, clientKey) {
@@ -2041,6 +2042,12 @@ export async function handleClientDashboardData(req, res, deps) {
 
     const dashboardExperience = buildDashboardExperience(client, activityAsOfLondon.toISO());
 
+    const poolQuerySelect = deps?.poolQuerySelect;
+    let callQuality = null;
+    if (isPostgres && typeof poolQuerySelect === 'function') {
+      callQuality = await loadDashboardCallQualityPayload(clientKey, { poolQuerySelect });
+    }
+
     const payload = {
       ok: true,
       source: 'live',
@@ -2048,6 +2055,7 @@ export async function handleClientDashboardData(req, res, deps) {
       briefEnrichmentSkipped: skipBriefEnrichment,
       recentLeadsListCap: leadsDashboardCap,
       outboundAbTest,
+      callQuality,
       metrics: {
         totalLeads,
         totalCalls: displayCalls,

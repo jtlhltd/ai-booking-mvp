@@ -11438,6 +11438,10 @@ ${actionsRow}
                     dashboardExperience:
                         livePayload.dashboardExperience && typeof livePayload.dashboardExperience === 'object'
                             ? { ...livePayload.dashboardExperience }
+                            : null,
+                    callQuality:
+                        livePayload.callQuality && typeof livePayload.callQuality === 'object'
+                            ? { ...livePayload.callQuality }
                             : null
                 };
             }
@@ -11446,10 +11450,10 @@ ${actionsRow}
             const metrics = livePayload.metrics || {};
             const baseLeads = Array.isArray(base.recentLeads) ? base.recentLeads : [];
             const importedLeads = baseLeads.filter(
-                (lead) => lead.status && (lead.status.includes('(sample)') || lead.status.includes('(demo)'))
+                (lead) => lead.status && (lead.status.includes('(sample)') || lead.status.includes('(sample)'))
             );
             const existingLeads = baseLeads.filter(
-                (lead) => !lead.status || (!lead.status.includes('(sample)') && !lead.status.includes('(demo)'))
+                (lead) => !lead.status || (!lead.status.includes('(sample)') && !lead.status.includes('(sample)'))
             );
             const newLeads = Array.isArray(livePayload.leads) && livePayload.leads.length ? livePayload.leads : [];
             
@@ -15176,81 +15180,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
 
-        async function renderCallQuality(data) {
-            const container = document.getElementById('call-quality');
-            if (!container) return;
-
-            if (currentClient === SANDBOX_CLIENT_KEY) {
-                const m = data.metrics || {};
-                const attempts = m.totalCallAttempts || data.totalCalls || 48;
-                const answeredAtt = Math.min(attempts, Math.max(12, Math.floor(attempts * 0.42)));
-                const uniqueLeads = Math.min(attempts, Math.max(8, Math.floor(attempts * 0.35)));
-                const avgSec = attempts > 0 ? 42 : 0;
-                const reach = attempts > 0 ? Math.round((answeredAtt / attempts) * 100) : 0;
-                const avgToPickup = 2.3;
-                const leadsPickupDemo = 18;
-                const medianSec = attempts > 0 ? 31 : 0;
-                const perLead = uniqueLeads > 0 ? Math.round((attempts / uniqueLeads) * 10) / 10 : null;
-                const bestHour = '14:00–16:00';
-                const voicemailPct = 22;
-                const vmDemo = Math.max(1, Math.round(attempts * (voicemailPct / 100)));
-                const peakDay = 'Thu';
-                const peakDayDials = 14;
-                container.innerHTML = `
-                    <div class="quality-metric">
-                        <div class="quality-label">Pick up rate</div>
-                        <div class="quality-value">${reach}%</div>
-                        <div class="quality-badge">conversation signal ÷ dial attempts (7d)</div>
-                    </div>
-                    <div class="quality-metric">
-                        <div class="quality-label">Avg calls to pick up</div>
-                        <div class="quality-value">${avgToPickup.toFixed(1)}</div>
-                        <div class="quality-badge">mean dials until first pickup · ${formatNumber(leadsPickupDemo)} leads (demo)</div>
-                    </div>
-                    <div class="quality-metric">
-                        <div class="quality-label">Voicemail %</div>
-                        <div class="quality-value">${voicemailPct}%</div>
-                        <div class="quality-badge">${formatNumber(vmDemo)} attempts with outcome voicemail (demo)</div>
-                    </div>
-                    <div class="quality-metric">
-                        <div class="quality-label">Avg duration</div>
-                        <div class="quality-value">${formatAvgCallSeconds(avgSec)}</div>
-                        <div class="quality-badge">rows with duration &gt; 0</div>
-                    </div>
-                    <div class="quality-metric">
-                        <div class="quality-label">Dial attempts</div>
-                        <div class="quality-value">${formatNumber(attempts)}</div>
-                        <div class="quality-badge">last 7 days</div>
-                    </div>
-                    <div class="quality-metric">
-                        <div class="quality-label">Unique leads</div>
-                        <div class="quality-value">${formatNumber(uniqueLeads)}</div>
-                        <div class="quality-badge">${perLead != null ? `~${perLead} attempts / lead` : 'distinct numbers'}</div>
-                    </div>
-                    <div class="quality-metric">
-                        <div class="quality-label">Median duration</div>
-                        <div class="quality-value">${formatMedianCallSeconds(medianSec)}</div>
-                        <div class="quality-badge">typical length when duration &gt; 0</div>
-                    </div>
-                    <div class="quality-metric">
-                        <div class="quality-label">Peak weekday</div>
-                        <div class="quality-value">${peakDay}</div>
-                        <div class="quality-badge">most dials that day in 7d (${formatNumber(peakDayDials)} demo)</div>
-                    </div>
-                    <div class="quality-metric">
-                        <div class="quality-label">Busiest dial window</div>
-                        <div class="quality-value quality-value--schedule">${bestHour}</div>
-                        <div class="quality-badge">most attempts in this 2h block</div>
-                    </div>
-                `;
-                return;
-            }
-
-            try {
-                const response = await fetch(`${BASE_URL}/api/call-quality/${encodeURIComponent(currentClient)}`);
-                const payload = await response.json();
-                if (response.ok && payload?.ok) {
-                    const sec = payload.avgDurationSeconds ?? payload.avgDuration;
+        
+        function paintCallQualityFromPayload(container, payload) {
+            const sec = payload.avgDurationSeconds ?? payload.avgDuration;
                     const total = payload.totalCalls || 0;
                     const pickup = payload.pickupRate ?? payload.reachRate ?? 0;
                     const vmRate = Math.min(100, Math.max(0, Number(payload.voicemailRate) || 0));
@@ -15325,7 +15257,89 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div class="quality-badge">${bestBadge}</div>
                         </div>
                     `;
-                } else {
+        }
+
+        async function renderCallQuality(data) {
+            const container = document.getElementById('call-quality');
+            if (!container) return;
+
+            if (currentClient === SANDBOX_CLIENT_KEY) {
+                const m = data.metrics || {};
+                const attempts = m.totalCallAttempts || data.totalCalls || 48;
+                const answeredAtt = Math.min(attempts, Math.max(12, Math.floor(attempts * 0.42)));
+                const uniqueLeads = Math.min(attempts, Math.max(8, Math.floor(attempts * 0.35)));
+                const avgSec = attempts > 0 ? 42 : 0;
+                const reach = attempts > 0 ? Math.round((answeredAtt / attempts) * 100) : 0;
+                const avgToPickup = 2.3;
+                const leadsPickupDemo = 18;
+                const medianSec = attempts > 0 ? 31 : 0;
+                const perLead = uniqueLeads > 0 ? Math.round((attempts / uniqueLeads) * 10) / 10 : null;
+                const bestHour = '14:00–16:00';
+                const voicemailPct = 22;
+                const vmDemo = Math.max(1, Math.round(attempts * (voicemailPct / 100)));
+                const peakDay = 'Thu';
+                const peakDayDials = 14;
+                container.innerHTML = `
+                    <div class="quality-metric">
+                        <div class="quality-label">Pick up rate</div>
+                        <div class="quality-value">${reach}%</div>
+                        <div class="quality-badge">conversation signal ÷ dial attempts (7d)</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Avg calls to pick up</div>
+                        <div class="quality-value">${avgToPickup.toFixed(1)}</div>
+                        <div class="quality-badge">mean dials until first pickup · ${formatNumber(leadsPickupDemo)} leads (sample)</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Voicemail %</div>
+                        <div class="quality-value">${voicemailPct}%</div>
+                        <div class="quality-badge">${formatNumber(vmDemo)} attempts with outcome voicemail (sample)</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Avg duration</div>
+                        <div class="quality-value">${formatAvgCallSeconds(avgSec)}</div>
+                        <div class="quality-badge">rows with duration &gt; 0</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Dial attempts</div>
+                        <div class="quality-value">${formatNumber(attempts)}</div>
+                        <div class="quality-badge">last 7 days</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Unique leads</div>
+                        <div class="quality-value">${formatNumber(uniqueLeads)}</div>
+                        <div class="quality-badge">${perLead != null ? `~${perLead} attempts / lead` : 'distinct numbers'}</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Median duration</div>
+                        <div class="quality-value">${formatMedianCallSeconds(medianSec)}</div>
+                        <div class="quality-badge">typical length when duration &gt; 0</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Peak weekday</div>
+                        <div class="quality-value">${peakDay}</div>
+                        <div class="quality-badge">most dials that day in 7d (${formatNumber(peakDayDials)} sample)</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Busiest dial window</div>
+                        <div class="quality-value quality-value--schedule">${bestHour}</div>
+                        <div class="quality-badge">most attempts in this 2h block</div>
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                const embedded = (data && data.callQuality) || (dashboardData && dashboardData.callQuality);
+                if (embedded && embedded.ok) {
+                    paintCallQualityFromPayload(container, embedded);
+                    return;
+                }
+                const response = await fetch(`${BASE_URL}/api/call-quality/${encodeURIComponent(currentClient)}`);
+                const payload = await response.json();
+                if (response.ok && payload?.ok) {
+                    paintCallQualityFromPayload(container, payload);
+                                } else {
                     const errMsg = (payload && payload.error) ? String(payload.error) : `HTTP ${response.status}`;
                     console.warn('Call quality API not ok:', errMsg, payload);
                     showError(container, `Could not load call quality: ${escapeHtml(errMsg)}`, () => renderCallQuality(dashboardData));
@@ -15334,6 +15348,311 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 console.error('Failed to load call quality', error);
                 showError(container, 'Unable to load call quality metrics. Please refresh the page.', () => renderCallQuality(dashboardData));
             }
+        }
+
+        function summarizeByHourForInsights(byHour) {
+            if (!Array.isArray(byHour) || byHour.length < 24) return '';
+            let best = null;
+            let worst = null;
+            for (const h of byHour) {
+                const attempts = h.attempts || 0;
+                if (attempts < 6) continue;
+                const ar = h.answeredRate != null ? Number(h.answeredRate) : h.answered / attempts;
+                const pct = Math.round(ar * 100);
+                const hour = h.hour != null ? Number(h.hour) : 0;
+                if (best === null || pct > best.pct) best = { hour, pct, attempts };
+                if (worst === null || pct < worst.pct) worst = { hour, pct, attempts };
+            }
+            if (!best) {
+                return '<p class="insights-panel-hint">We need <strong>at least 6 calls</strong> in an hour before we compare that hour fairly (same rule as “best hours” ranking).</p>';
+            }
+            const weakLine =
+                worst && worst.hour !== best.hour
+                    ? ` <strong>Weakest busy hour:</strong> ${String(worst.hour).padStart(2, '0')}:00 · ${worst.pct}% answered (${worst.attempts} calls).`
+                    : '';
+            return `<p class="insights-panel-hint"><strong>Strongest busy hour:</strong> ${String(best.hour).padStart(2, '0')}:00 · ${best.pct}% answered (${best.attempts} calls).${weakLine}</p>`;
+        }
+
+        function buildInsightsHourBarChart(byHour, timeZoneLabel) {
+            if (!Array.isArray(byHour) || byHour.length < 24) {
+                return '<p class="insights-panel-hint">No hourly breakdown for this window.</p>';
+            }
+            let maxPct = 1;
+            byHour.forEach((h) => {
+                const attempts = h.attempts || 0;
+                if (attempts > 0) {
+                    const ar = h.answeredRate != null ? Number(h.answeredRate) : h.answered / attempts;
+                    const pct = Math.round(ar * 100);
+                    if (pct > maxPct) maxPct = pct;
+                }
+            });
+            const bars = byHour
+                .map((h) => {
+                    const hour = h.hour != null ? Number(h.hour) : 0;
+                    const attempts = h.attempts || 0;
+                    const ar = h.answeredRate != null ? Number(h.answeredRate) : (attempts ? h.answered / attempts : 0);
+                    const pct = Math.round(ar * 100);
+                    const hPct = maxPct > 0 ? Math.round((pct / maxPct) * 100) : 0;
+                    const title = attempts
+                        ? `${String(hour).padStart(2, '0')}:00 — ${pct}% answered (${h.answered}/${attempts} dials)`
+                        : `${String(hour).padStart(2, '0')}:00 — no dials`;
+                    const cls = attempts ? 'insights-hour-bar' : 'insights-hour-bar insights-hour-bar--empty';
+                    const pctLabel = attempts ? `${pct}%` : '';
+                    const hourTick = hour % 4 === 0 ? escapeHtml(String(hour)) : '';
+                    return `<div class="insights-hour-bar-wrap" title="${title.replace(/"/g, '&quot;')}">
+                    <div class="${cls}" style="height:${attempts ? Math.max(8, hPct) : 3}px"></div>
+                    <span class="insights-bar-pct">${escapeHtml(pctLabel)}</span>
+                    <span class="insights-hour-label">${hourTick}</span>
+                </div>`;
+                })
+                .join('');
+            return `<p class="insights-panel-hint">Each bar shows <strong>what share of calls got an answer</strong> for calls made in that hour (${escapeHtml(
+                timeZoneLabel || 'UTC'
+            )}). Taller bar = more people picked up in this report. Scroll horizontally if the chart is wider than the card.</p>
+                ${summarizeByHourForInsights(byHour)}
+                <div class="insights-chart-x-scroll">
+                <div class="insights-hour-bars" role="img" aria-label="Answered rate by hour of day">${bars}</div>
+                </div>`;
+        }
+
+        function buildInsightsWeekdayBarChart(byWeekday) {
+            const WD_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            if (!Array.isArray(byWeekday) || byWeekday.length < 1) {
+                return '<p class="insights-panel-hint">No weekday breakdown.</p>';
+            }
+            let maxPct = 1;
+            byWeekday.forEach((d) => {
+                const attempts = d.attempts || 0;
+                if (attempts > 0) {
+                    const ar = d.answeredRate != null ? Number(d.answeredRate) : d.answered / attempts;
+                    const pct = Math.round(ar * 100);
+                    if (pct > maxPct) maxPct = pct;
+                }
+            });
+            const cols = byWeekday
+                .map((d) => {
+                    const attempts = d.attempts || 0;
+                    const ar = d.answeredRate != null ? Number(d.answeredRate) : (attempts ? d.answered / attempts : 0);
+                    const pct = Math.round(ar * 100);
+                    const hPct = maxPct > 0 ? Math.round((pct / maxPct) * 100) : 0;
+                    const wd = Number(d.weekday);
+                    const idx = Number.isFinite(wd) ? Math.max(0, Math.min(6, wd - 1)) : 0;
+                    const rawLabel = d.label && String(d.label).trim();
+                    const label = rawLabel || WD_SHORT[idx] || '—';
+                    const title = attempts
+                        ? `${label}: ${pct}% answered (${d.answered}/${attempts})`
+                        : `${label}: no dials`;
+                    const pctLabel = attempts ? `${pct}%` : '';
+                    return `<div class="insights-weekday-col" title="${title.replace(/"/g, '&quot;')}">
+                    <div class="${attempts ? 'insights-wd-bar' : 'insights-wd-bar insights-wd-bar--empty'}" style="height:${attempts ? Math.max(10, hPct) : 5}px"></div>
+                    <span class="insights-bar-pct" style="font-size:8px">${escapeHtml(pctLabel)}</span>
+                    <span class="insights-wd-label">${escapeHtml(label)}</span>
+                </div>`;
+                })
+                .join('');
+            return `<p class="insights-panel-hint">Shows <strong>what share of calls got an answer</strong> on each weekday — useful for staffing and when leads come in.</p>
+                <div class="insights-chart-x-scroll">
+                <div class="insights-weekday-bars" role="img" aria-label="Answered rate by weekday">${cols}</div>
+                </div>`;
+        }
+
+        function buildInsightsPairChips(items, emptyMsg) {
+            if (!Array.isArray(items) || !items.length) {
+                return `<p class="insights-panel-hint">${escapeHtml(emptyMsg)}</p>`;
+            }
+            return `<div class="insights-outcome-chips" role="list">${items
+                .map(
+                    (x) =>
+                        `<span class="insights-chip" role="listitem">${escapeHtml(x.key)} · ${formatNumber(x.count)}</span>`
+                )
+                .join('')}</div>`;
+        }
+
+        function buildInsightsDataProvenance(routing, summary, periodDays) {
+            const h = routing?.howCalculated || {};
+            const days = Number(h.periodDays) || Number(periodDays) || 30;
+            const tz = escapeHtml(h.reportTimeZone || routing?.timeZone || 'UTC');
+            const cap = h.maxCallsFromDatabase != null ? formatNumber(h.maxCallsFromDatabase) : formatNumber(2000);
+            const n =
+                summary?.attempts != null
+                    ? formatNumber(summary.attempts)
+                    : h.callsInReport != null
+                      ? formatNumber(h.callsInReport)
+                      : '—';
+            const minSlot = h.minCallsPerSlotForRanking ?? 6;
+            return `<div class="insights-panel insights-panel--span insights-provenance">
+                <div class="insights-panel-title">Methodology</div>
+                <p class="insights-provenance-kicker">
+                    <strong>Answered</strong> means a <strong>conversation signal</strong>, not merely that the phone rang.
+                    Outcomes such as <strong>voicemail</strong>, <strong>no-answer</strong>, <strong>busy</strong>, <strong>failed</strong>, <strong>declined</strong>, and <strong>rejected</strong> count as <strong>not</strong> answered — same heuristic as the rest of this dashboard.
+                    If the outcome is unclear, we may still count a call as answered when duration, transcript length, or a recording suggests a real interaction.
+                </p>
+                <p class="insights-provenance-kicker" style="margin-bottom:0">
+                    <strong>Note:</strong> “Best hours/days” only need <strong>${minSlot}+ calls per slot</strong> to rank; that is <strong>not</strong> the same as outbound A/B “sample ready” targets (live pickups per variant), which are shown in the A/B monitoring block.
+                </p>
+                <details class="insights-methods-details">
+                    <summary>Full calculation details</summary>
+                    <ul class="insights-provenance-list">
+                        <li><strong>Report window</strong> — Up to <strong>${cap}</strong> most recent calls from the last <strong>${days}</strong> days; figures above use <strong>${n}</strong> calls in this snapshot.</li>
+                        <li><strong>Answered rate</strong> — Share of those calls classified as answered (see kicker). Useful for overall reach, not calendar bookings.</li>
+                        <li><strong>Best hours</strong> — Each call is bucketed by <strong>start hour</strong> in <strong>${tz}</strong>. The bracket score (e.g. 18:00 <strong>(72)</strong>) is answered rate scaled to <strong>0–100</strong>. We only <strong>rank</strong> an hour after <strong>${minSlot}</strong> or more calls in that hour.</li>
+                        <li><strong>Best days</strong> — Same logic by <strong>weekday</strong>, with the same <strong>${minSlot}</strong>-call minimum before a day can rank.</li>
+                        <li><strong>Top objections &amp; key phrases</strong> — After a call, we run <strong>keyword rules</strong> on the transcript (e.g. cost → “price”, callback language → “timing”). Counts are <strong>how often tags fired</strong> in this window — automated, not a human review of every call.</li>
+                        <li><strong>Suggested tweak</strong> — Shown when simple rules fire (e.g. many “not interested” outcomes). Your production assistant <strong>does not change automatically</strong>.</li>
+                        <li><strong>How far to trust it</strong> — Timestamps and answered rates are good for <strong>timing patterns</strong>. Phrase tags are <strong>trend hints</strong>; spot-check recordings before big script changes. Suggested tweaks are <strong>experiments to consider</strong>, not guarantees.</li>
+                    </ul>
+                </details>
+                <p class="insights-panel-hint" style="margin-top:12px;margin-bottom:0">Click <strong>Refresh insights</strong> to rebuild from your latest calls.</p>
+            </div>`;
+        }
+
+        function buildInsightsActionHintsPanel(actionHints) {
+            const bullets = (actionHints && actionHints.bullets) || [];
+            if (!bullets.length) return '';
+            const items = bullets
+                .map((b) => {
+                    const k = String(b.kind || 'info').replace(/[^a-z-]/g, '') || 'info';
+                    return `<li class="insights-action-item insights-action-item--${k}"><strong>${escapeHtml(b.title || '')}</strong> ${escapeHtml(b.detail || '')}</li>`;
+                })
+                .join('');
+            const head = actionHints.headline ? `<p class="insights-panel-hint">${escapeHtml(actionHints.headline)}</p>` : '';
+            return `<div class="insights-panel insights-panel--span">
+                <div class="insights-panel-title">What to do with this</div>
+                <p class="insights-panel-hint" style="margin-top:2px">Short suggestions based on your data — no stats degree required.</p>
+                ${head}
+                <ul class="insights-action-list">${items}</ul>
+            </div>`;
+        }
+
+        function scheduleSourceLabel(s) {
+            if (s === 'thompson') return 'Smart timing';
+            if (s === 'routing_heuristic') return 'From your stats';
+            return s ? String(s) : '—';
+        }
+
+        function buildInsightsMonitoringSection(bandit) {
+            const obs = (bandit && bandit.recentActivity) || [];
+            const sched = (bandit && bandit.scheduleAdjustments) || [];
+            const last7 = bandit && bandit.observationsLast7Days;
+            const n7 = last7 != null ? formatNumber(last7) : '—';
+            let obsBlock =
+                '<p class="insights-panel-hint">Nothing here yet. Click <strong>Refresh insights</strong> to pull in your call history; new finished calls will show up as they come in.</p>';
+            if (obs.length) {
+                const rows = obs
+                    .slice(0, 18)
+                    .map(
+                        (r) =>
+                            `<tr><td>${escapeHtml(r.at ? formatTimeAgo(r.at) : '—')}</td><td>${escapeHtml(String(r.hour).padStart(2, '0'))}:00</td><td>${
+                                r.success ? 'Answered' : 'No pickup'
+                            }</td><td class="insights-cell-callid">${escapeHtml(String(r.callId || '—'))}</td></tr>`
+                    )
+                    .join('');
+                obsBlock = `<div class="insights-table-scroll"><table class="insights-monitor-table"><thead><tr><th>When</th><th>Time</th><th>Result</th><th>Call ref.</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+            }
+            let schedBlock =
+                '<p class="insights-panel-hint">Nothing here yet. When the system moves a queued call to a better time (more than a minute different), it will appear in this list.</p>';
+            if (sched.length) {
+                const rows = sched
+                    .slice(0, 15)
+                    .map((r) => {
+                        const bas = r.baselineAt
+                            ? new Date(r.baselineAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            : '—';
+                        const chs = r.chosenAt
+                            ? new Date(r.chosenAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            : '—';
+                        return `<tr><td>${escapeHtml(r.at ? formatTimeAgo(r.at) : '—')}</td><td>${escapeHtml(scheduleSourceLabel(r.source))}</td><td>${escapeHtml(
+                            r.hourChosen != null ? `${String(r.hourChosen).padStart(2, '0')}:00` : '—'
+                        )}</td><td class="insights-cell-delay">${r.delayMinutes != null ? `${escapeHtml(String(r.delayMinutes))}m` : '—'}</td><td class="insights-cell-wrap">${escapeHtml(
+                            bas
+                        )} → ${escapeHtml(chs)}</td></tr>`;
+                    })
+                    .join('');
+                schedBlock = `<div class="insights-table-scroll"><table class="insights-monitor-table"><thead><tr><th>When</th><th>Why</th><th>Hour</th><th>Moved by</th><th>Old time → new time</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+            }
+            return `<div class="insights-panel insights-panel--span">
+                <div class="insights-panel-title">Recent learning & rescheduled calls</div>
+                <p class="insights-panel-hint"><strong>${n7}</strong> call results added to timing learning in the last 7 days.</p>
+                <div class="insights-wide-grid">
+                    <div class="insights-grid-cell"><span class="insights-subcaption">Latest call results (by hour)</span>${obsBlock}</div>
+                    <div class="insights-grid-cell"><span class="insights-subcaption">When we moved a queued call</span>${schedBlock}</div>
+                </div>
+            </div>`;
+        }
+
+        function banditStrengthCaption(s) {
+            if (s === 'strong') return 'Lots of calls — pretty reliable';
+            if (s === 'building') return 'Enough to trust a little';
+            if (s === 'early') return 'Still learning';
+            return 'No data yet (starting guess)';
+        }
+
+        function buildInsightsBanditBlock(bandit) {
+            const ranked = (bandit && bandit.ranked) || [];
+            const sched = bandit?.optimalSchedulingActive ? 'On' : 'Off';
+            const th = bandit?.thompsonActive ? 'On' : 'Off';
+            const pill = `<div class="insights-panel-hint" style="margin-bottom:8px">
+                <span class="insights-status-pill">Smarter call times: ${sched}</span>
+                <span class="insights-status-pill">Learn from answers: ${th}</span>
+                ${bandit?.demo ? '<span class="insights-status-pill">Demo preview</span>' : ''}
+            </div>`;
+            const obs7 =
+                bandit?.observationsLast7Days != null ? formatNumber(bandit.observationsLast7Days) : null;
+            const obsLine =
+                bandit?.updatedAt && !bandit?.demo
+                    ? `<p class="insights-panel-hint">${formatNumber(bandit.observationCount || 0)} calls used to learn best times · ${obs7 != null ? `<strong>${obs7}</strong> in the last 7 days · ` : ''}updated ${formatTimeAgo(bandit.updatedAt)}</p>`
+                    : bandit?.demo
+                      ? '<p class="insights-panel-hint">Example data — your live account will show real numbers.</p>'
+                      : !bandit?.ok
+                        ? `<p class="insights-panel-hint">Could not load timing data${bandit?.error ? `: ${escapeHtml(String(bandit.error))}` : ''}.</p>`
+                        : `<p class="insights-panel-hint">${formatNumber(bandit?.observationCount || 0)} calls on file${obs7 != null ? ` · <strong>${obs7}</strong> in the last 7 days` : ''}.</p>`;
+            if (!ranked.length) {
+                return `${pill}${obsLine}<p class="insights-panel-hint">We don’t have hour-by-hour learnings yet. Click <strong>Refresh insights</strong> to load your history; new finished calls update this automatically.</p>`;
+            }
+            const rows = ranked
+                .map(
+                    (r) =>
+                        `<tr><td>${escapeHtml(r.label)}</td><td><strong>${r.meanAnsweredPct}%</strong></td><td>${formatNumber(r.successes)} / ${formatNumber(r.failures)}</td><td>${escapeHtml(banditStrengthCaption(r.strength))}</td></tr>`
+                )
+                .join('');
+            return `${pill}${obsLine}<p class="insights-panel-hint">For each hour, we estimate how often calls get an answer based on past calls. The system uses this to pick better times while still trying new slots sometimes.</p>
+            <table class="insights-bandit-table">
+                <thead><tr><th>Hour</th><th>Est. answer rate</th><th>Reached / didn’t</th><th>How sure</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+        }
+
+        function demoCallTimeBanditPayload() {
+            const now = new Date().toISOString();
+            return {
+                ok: true,
+                demo: true,
+                observationCount: 284,
+                observationsLast7Days: 62,
+                updatedAt: now,
+                recentActivity: [
+                    { callId: 'demo-call-901', hour: 10, success: true, at: now },
+                    { callId: 'demo-call-900', hour: 14, success: false, at: now }
+                ],
+                scheduleAdjustments: [
+                    {
+                        baselineAt: new Date(Date.now() - 86400000).toISOString(),
+                        chosenAt: new Date(Date.now() - 86400000 + 3600000).toISOString(),
+                        source: 'thompson',
+                        hourChosen: 11,
+                        delayMinutes: 60,
+                        at: new Date(Date.now() - 86400000).toISOString()
+                    }
+                ],
+                ranked: [
+                    { hour: 10, label: '10:00', meanAnsweredPct: 41, successes: 17, failures: 25, observations: 42, strength: 'building', uncertainty: 14 },
+                    { hour: 14, label: '14:00', meanAnsweredPct: 36, successes: 11, failures: 21, observations: 32, strength: 'building', uncertainty: 16 },
+                    { hour: 9, label: '09:00', meanAnsweredPct: 33, successes: 9, failures: 19, observations: 28, strength: 'early', uncertainty: 18 },
+                    { hour: 16, label: '16:00', meanAnsweredPct: 29, successes: 6, failures: 17, observations: 23, strength: 'early', uncertainty: 19 }
+                ],
+                thompsonActive: true,
+                optimalSchedulingActive: true
+            };
         }
 
         function summarizeByHourForInsights(byHour) {
@@ -19992,7 +20311,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     testCallBtn.textContent = '📞 Calling...';
                     
                     try {
-                        const response = await fetch(`${BASE_URL}/api/demo/test-call`, {
+                        const response = await fetch(`${BASE_URL}/api/client/test-call`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
@@ -20137,11 +20456,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         function applyLocalLeadAction(lead, action) {
             if (action === 'snooze') {
-                lead.status = 'Snoozed (demo)';
-                lead.lastMessage = 'Lead snoozed for 1 day (demo).';
+                lead.status = 'Snoozed (sample)';
+                lead.lastMessage = 'Lead snoozed for 1 day (sample).';
             } else {
-                lead.status = 'Priority (demo)';
-                lead.lastMessage = 'Escalated to operator (demo).';
+                lead.status = 'Priority (sample)';
+                lead.lastMessage = 'Escalated to operator (sample).';
             }
         }
 
@@ -21070,7 +21389,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         phone,
                         service: lead.service || 'Lead Follow-Up',
                         source: lead.source || 'Import',
-                        status: 'New (demo)',
+                        status: 'New (sample)',
                         lastMessage: 'Added via CSV import.',
                         timeAgo: 'Just now'
                     };
@@ -21085,7 +21404,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 updateStatusBar(dashboardData);
                 renderRecentActivity(dashboardData);
                 renderLeadJourney(dashboardData);
-                setImportStatus(`${demoLeads.length} leads staged (demo)`, 'success');
+                setImportStatus(`${demoLeads.length} leads staged (sample)`, 'success');
                 showToast('Leads Imported', `${demoLeads.length} leads added (demo mode)`, 'success');
                 return;
             }

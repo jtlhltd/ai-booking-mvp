@@ -25,6 +25,13 @@ describe('outreach dashboard load policy (static guard)', () => {
     expect(html).toMatch(/DASHBOARD_FULL_HYDRATE_IDLE_MS\s*=\s*30000/);
   });
 
+  test('call quality prefers embedded client-dashboard payload', () => {
+    const html = fs.readFileSync(DASHBOARD_HTML, 'utf8');
+    expect(html).toMatch(/paintCallQualityFromPayload/);
+    expect(html).toMatch(/data\.callQuality|dashboardData\.callQuality/);
+    expect(html).toMatch(/livePayload\.callQuality/);
+  });
+
   test('outreach deferred wave still loads recordings panels', () => {
     const html = fs.readFileSync(DASHBOARD_HTML, 'utf8');
     expect(html).toMatch(/runDashboardDeferredWave1/);

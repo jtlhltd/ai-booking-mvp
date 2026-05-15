@@ -272,6 +272,7 @@ export function mountApi(app, deps) {
           buildDashboardExperience,
           sendOperatorAlert,
           fetchImpl,
+          poolQuerySelect,
         }),
     })
   );

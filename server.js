@@ -154,8 +154,6 @@ import { createLeadsExistingMatchKeysRouter } from './routes/leads-existing-matc
 import { createAbTestResultsRouter } from './routes/ab-test-results.js';
 import { createDemoTestCallRouter } from './routes/demo-test-call.js';
 import { createCallTranscriptRouter } from './routes/call-transcript.js';
-import { createClientDashboardDebugRouter } from './routes/client-dashboard-debug.js';
-import { createClientDashboardDataRouter, handleClientDashboardData } from './routes/client-dashboard-data.js';
 import { createLeadTimelineRouter } from './routes/lead-timeline.js';
 import { createCallTimeBanditRouter } from './routes/call-time-bandit.js';
 import { createRetryQueueRouter } from './routes/retry-queue.js';
