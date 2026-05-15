@@ -178,6 +178,35 @@ export function createOutboundSequenceVisibilityRouter(deps) {
     return map;
   }
 
+  function escapeIlikePattern(value) {
+    return String(value || '').replace(/[%_\\]/g, '\\$&');
+  }
+
+  function buildResolveMatchLabel({ leadPhone, name, service, matchType }) {
+    const phone = String(leadPhone || '').trim();
+    const bits = [String(name || '').trim(), String(service || '').trim(), phone].filter(Boolean);
+    return {
+      leadPhone: phone,
+      matchType: String(matchType || 'text'),
+      name: name || null,
+      service: service || null,
+      label: bits.length ? bits.join(' · ') : phone,
+    };
+  }
+
+  function dedupeResolveMatches(matches, limit = 12) {
+    const seen = new Set();
+    const out = [];
+    for (const m of Array.isArray(matches) ? matches : []) {
+      const phone = String(m?.leadPhone || '').trim();
+      if (!phone || seen.has(phone)) continue;
+      seen.add(phone);
+      out.push(m);
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
   function buildSequenceConfigExplain(client) {
     const explain = {
       killSwitchActive: false,
@@ -430,6 +459,137 @@ export function createOutboundSequenceVisibilityRouter(deps) {
     } catch (error) {
       console.error('[OUTBOUND SEQUENCE LEADS ERROR]', error);
       return res.status(500).json({ ok: false, error: 'outbound_sequence_leads_failed', message: error?.message || String(error) });
+    }
+  });
+
+  router.get('/outbound-sequence/:clientKey/resolve', async (req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store');
+      const { clientKey } = req.params;
+      const qRaw = String(req.query.q || '')
+        .trim()
+        .replace(/[\u200b-\u200d\ufeff\u200e\u200f\u202a-\u202e]/g, '');
+      if (qRaw.length < 2) {
+        return res.status(400).json({ ok: false, error: 'query_too_short', message: 'Enter at least 2 characters.' });
+      }
+      const client = await getFullClient?.(clientKey, { bypassCache: false }).catch(() => null);
+      if (!client) return res.status(404).json({ ok: false, error: 'client_not_found' });
+
+      if (!isPostgres) {
+        return res.json({ ok: true, clientKey, query: qRaw, matches: [], notes: ['resolve is only available on Postgres'] });
+      }
+
+      const matches = [];
+      const digits = qRaw.replace(/\D/g, '');
+      const phoneMatch = phoneKeyFn(qRaw);
+      const ilike = `%${escapeIlikePattern(qRaw)}%`;
+
+      const pushRows = (rows, matchType) => {
+        for (const row of rows || []) {
+          const label = buildResolveMatchLabel({
+            leadPhone: row.leadPhone || row.phone,
+            name: row.name,
+            service: row.service,
+            matchType,
+          });
+          if (label.leadPhone) matches.push(label);
+        }
+      };
+
+      if (digits.length >= 7 || qRaw.startsWith('+')) {
+        const phoneRes = await query(
+          `
+          SELECT DISTINCT lead_phone AS "leadPhone"
+          FROM lead_sequence_state
+          WHERE client_key = $1
+            AND (
+              lead_phone = $2
+              OR (
+                NULLIF(regexp_replace(COALESCE($2, ''), '[^0-9]', '', 'g'), '') IS NOT NULL
+                AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g')
+                  = regexp_replace(COALESCE($2, ''), '[^0-9]', '', 'g')
+              )
+              OR (
+                NULLIF(btrim(COALESCE($3::text, '')), '') IS NOT NULL
+                AND RIGHT(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), 10) = $3::text
+              )
+            )
+          LIMIT 8
+        `,
+          [clientKey, qRaw, phoneMatch]
+        );
+        pushRows(phoneRes?.rows || [], 'phone');
+      }
+
+      if (/^\d+$/.test(qRaw)) {
+        const idRes = await query(
+          `
+          SELECT l.phone AS "leadPhone", l.name, l.service
+          FROM leads l
+          INNER JOIN lead_sequence_state s
+            ON s.client_key = l.client_key AND s.lead_phone = l.phone
+          WHERE l.client_key = $1 AND l.id = $2::bigint
+          LIMIT 5
+        `,
+          [clientKey, qRaw]
+        );
+        pushRows(idRes?.rows || [], 'lead_id');
+      }
+
+      const textRes = await query(
+        `
+        SELECT DISTINCT l.phone AS "leadPhone", l.name, l.service
+        FROM leads l
+        INNER JOIN lead_sequence_state s
+          ON s.client_key = l.client_key AND s.lead_phone = l.phone
+        WHERE l.client_key = $1
+          AND (
+            l.name ILIKE $2 ESCAPE '\\'
+            OR l.service ILIKE $2 ESCAPE '\\'
+            OR l.source ILIKE $2 ESCAPE '\\'
+            OR l.notes ILIKE $2 ESCAPE '\\'
+            OR l.phone ILIKE $2 ESCAPE '\\'
+          )
+        ORDER BY l.created_at DESC
+        LIMIT 10
+      `,
+        [clientKey, ilike]
+      );
+      pushRows(textRes?.rows || [], 'text');
+
+      const handoffRes = await query(
+        `
+        SELECT DISTINCT h.lead_phone AS "leadPhone", l.name, l.service
+        FROM lead_handoff h
+        INNER JOIN lead_sequence_state s
+          ON s.client_key = h.client_key AND s.lead_phone = h.lead_phone
+        LEFT JOIN leads l
+          ON l.client_key = h.client_key AND l.phone = h.lead_phone
+        WHERE h.client_key = $1
+          AND (
+            h.summary_text ILIKE $2 ESCAPE '\\'
+            OR h.operator_notes ILIKE $2 ESCAPE '\\'
+          )
+        ORDER BY h.updated_at DESC
+        LIMIT 8
+      `,
+        [clientKey, ilike]
+      );
+      pushRows(handoffRes?.rows || [], 'handoff');
+
+      return res.json({
+        ok: true,
+        clientKey,
+        query: qRaw,
+        matches: dedupeResolveMatches(matches),
+      });
+    } catch (error) {
+      console.error('[OUTBOUND SEQUENCE RESOLVE ERROR]', error);
+      return res.status(500).json({
+        ok: false,
+        error: 'outbound_sequence_resolve_failed',
+        message: error?.message || String(error),
+      });
     }
   });
 

@@ -7231,8 +7231,8 @@
 
                     <div class="outbound-seq-toolbar">
                         <label>
-                            Lead phone (E.164 or local)
-                            <input type="text" id="outboundSequencePhoneInput" autocomplete="off" spellcheck="false" placeholder="+44… or 07…" />
+                            Search lead (phone, name, ID, service…)
+                            <input type="text" id="outboundSequencePhoneInput" autocomplete="off" spellcheck="false" placeholder="Phone, name, lead ID, service…" />
                         </label>
                         <button type="button" id="outboundSequenceLookupBtn" class="export-btn secondary">Lookup</button>
                         <small id="outboundSequenceLookupMsg" style="color:var(--muted);"></small>
@@ -8981,6 +8981,119 @@
             return followUpNormalizePhoneKey(phone) || String(phone || '').trim();
         }
 
+        function outboundSequenceRowSearchHaystack(r) {
+            const lead = r?.lead && typeof r.lead === 'object' ? r.lead : {};
+            const handoff = r?.handoff && typeof r.handoff === 'object' ? r.handoff : {};
+            return [
+                r?.leadPhone,
+                lead.name,
+                lead.service,
+                lead.source,
+                lead.notes,
+                lead.id,
+                lead.status,
+                handoff.summaryText,
+                handoff.operatorNotes,
+            ].map((v) => String(v || '').toLowerCase());
+        }
+
+        function outboundSequenceSearchLocalRows(query) {
+            const q = String(query || '').trim().toLowerCase();
+            if (!q || q.length < 2) return [];
+            const digits = q.replace(/\D/g, '');
+            const rows = Array.isArray(outboundSequenceRecentRows) ? outboundSequenceRecentRows : [];
+            return rows.filter((r) => {
+                const hay = outboundSequenceRowSearchHaystack(r);
+                if (hay.some((h) => h.includes(q))) return true;
+                if (digits.length >= 7) {
+                    const phoneDigits = String(r?.leadPhone || '').replace(/\D/g, '');
+                    if (phoneDigits.includes(digits)) return true;
+                    if (digits.length >= 10 && phoneDigits.length >= 10 && phoneDigits.slice(-10) === digits.slice(-10)) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+        }
+
+        function outboundSequenceMergeResolveMatches(apiMatches, localRows) {
+            const map = new Map();
+            for (const m of Array.isArray(apiMatches) ? apiMatches : []) {
+                const phone = String(m?.leadPhone || '').trim();
+                if (!phone) continue;
+                map.set(phone, m);
+            }
+            for (const r of Array.isArray(localRows) ? localRows : []) {
+                const phone = String(r?.leadPhone || '').trim();
+                if (!phone || map.has(phone)) continue;
+                const title = outboundSequenceLeadTitle(r);
+                map.set(phone, {
+                    leadPhone: phone,
+                    matchType: 'list',
+                    label: title !== phone ? `${title} · ${phone}` : phone,
+                    name: r?.lead?.name || null,
+                    service: r?.lead?.service || null,
+                });
+            }
+            return [...map.values()].slice(0, 12);
+        }
+
+        async function outboundSequenceResolveQuery(clientKey, raw) {
+            const trimmed = String(raw || '').trim();
+            if (!trimmed) return { matches: [], error: 'empty' };
+            if (trimmed.length < 2) return { matches: [], error: 'too_short' };
+            const local = outboundSequenceSearchLocalRows(trimmed);
+            let apiMatches = [];
+            let apiError = '';
+            try {
+                const res = await fetch(
+                    `${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/resolve?q=${encodeURIComponent(trimmed)}`,
+                    { cache: 'no-store' }
+                );
+                const payload = await res.json().catch(() => ({}));
+                if (!res.ok || payload?.ok === false) {
+                    apiError = payload?.message || payload?.error || `HTTP ${res.status}`;
+                } else {
+                    apiMatches = Array.isArray(payload.matches) ? payload.matches : [];
+                }
+            } catch (e) {
+                apiError = e?.message || String(e);
+            }
+            const matches = outboundSequenceMergeResolveMatches(apiMatches, local);
+            if (!matches.length && apiError) return { matches: [], error: apiError };
+            return { matches };
+        }
+
+        function renderOutboundSequenceLookupMatches(matches, { onPick } = {}) {
+            const host = document.getElementById('outboundSequenceLookupMatches');
+            if (!host) return;
+            const list = Array.isArray(matches) ? matches : [];
+            if (!list.length) {
+                host.hidden = true;
+                host.innerHTML = '';
+                return;
+            }
+            host.hidden = false;
+            host.innerHTML = `
+                <div class="tom-ab-test-meta" style="margin:0 0 6px 0;">${list.length} match${list.length === 1 ? '' : 'es'} — click to open:</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                    ${list.map((m) => {
+                        const phone = String(m?.leadPhone || '').trim();
+                        const label = String(m?.label || phone || 'Lead');
+                        const type = m?.matchType ? ` · ${m.matchType}` : '';
+                        return `<button type="button" class="export-btn secondary outbound-seq-lookup-match" data-seq-resolve-phone="${escapeHtml(phone)}" style="font-size:0.85rem;">${escapeHtml(label)}<span class="tom-ab-test-meta">${escapeHtml(type)}</span></button>`;
+                    }).join('')}
+                </div>
+            `;
+            host.querySelectorAll('[data-seq-resolve-phone]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const phone = btn.getAttribute('data-seq-resolve-phone') || '';
+                    if (!phone || typeof onPick !== 'function') return;
+                    await onPick(phone);
+                });
+            });
+        }
+
         /** Match a recent-list row by exact leadPhone or same last-10-digit key as the server detail route. */
         function outboundSequenceFindRowByPhoneHint(needle, rows) {
             const n = String(needle || '').trim();
@@ -9494,13 +9607,35 @@
                 lookupBtn.addEventListener('click', async () => {
                     const raw = input?.value?.trim();
                     if (!raw) {
-                        if (msg) msg.textContent = 'Enter a phone number.';
+                        if (msg) msg.textContent = 'Enter a phone, name, lead ID, or other search text.';
+                        renderOutboundSequenceLookupMatches([]);
                         return;
                     }
-                    outboundSequenceSelectedPhone = raw;
-                    if (msg) msg.textContent = 'Loading…';
-                    await refreshOutboundSequenceWindow(currentClient, { phoneLookup: raw });
-                    if (msg) msg.textContent = '';
+                    if (msg) msg.textContent = 'Searching…';
+                    renderOutboundSequenceLookupMatches([]);
+                    const { matches, error } = await outboundSequenceResolveQuery(currentClient, raw);
+                    if (!matches.length) {
+                        if (msg) {
+                            msg.textContent = error === 'too_short'
+                                ? 'Enter at least 2 characters.'
+                                : `No matching sequence lead found.${error ? ` (${error})` : ''}`;
+                        }
+                        return;
+                    }
+                    const openMatch = async (phone) => {
+                        outboundSequenceSelectedPhone = phone;
+                        if (input) input.value = phone;
+                        renderOutboundSequenceLookupMatches([]);
+                        if (msg) msg.textContent = 'Loading…';
+                        await refreshOutboundSequenceWindow(currentClient, { phoneLookup: phone });
+                        if (msg) msg.textContent = '';
+                    };
+                    if (matches.length === 1) {
+                        await openMatch(matches[0].leadPhone);
+                        return;
+                    }
+                    if (msg) msg.textContent = `${matches.length} matches:`;
+                    renderOutboundSequenceLookupMatches(matches, { onPick: openMatch });
                 });
             }
             if (input) {
