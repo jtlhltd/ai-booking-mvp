@@ -8838,6 +8838,49 @@
             return { label: outboundSequenceHumanize(status || cohort || 'unknown'), tone: 'neutral' };
         }
 
+        /** Stopped / abandoned / completed sequences should not show active-stage progression blockers. */
+        function outboundSequenceTerminalState(row, handoff) {
+            const cohort = String(row?.dashboardCohort || '').trim().toLowerCase();
+            const seqStatus = String(row?.status || '').trim().toLowerCase();
+            const handoffSource = String(handoff?.source || '').trim();
+            if (cohort === 'stopped' || handoffSource === 'operator.sequence_stopped') {
+                return { terminal: true, kind: 'stopped' };
+            }
+            if (cohort === 'abandoned' || (seqStatus === 'abandoned' && handoffSource !== 'operator.sequence_stopped')) {
+                return { terminal: true, kind: 'abandoned' };
+            }
+            if (cohort === 'completed' || seqStatus === 'completed') {
+                return { terminal: true, kind: 'completed' };
+            }
+            if (cohort === 'dismissed_abandoned') {
+                return { terminal: true, kind: 'dismissed' };
+            }
+            return { terminal: false, kind: null };
+        }
+
+        function outboundSequenceTerminalSummary(terminal, handoff, statusMeta) {
+            const summaryText = String(handoff?.summaryText || handoff?.summary_text || '').trim();
+            if (terminal.kind === 'stopped') {
+                return (
+                    summaryText ||
+                    'Sequence stopped by operator. No further automated sequence dials are scheduled; use handoff context and call history for human follow-up.'
+                );
+            }
+            if (terminal.kind === 'abandoned') {
+                return (
+                    summaryText ||
+                    'Sequence abandoned by system (dial cap, duration limit, or stage rules). No next stage is queued.'
+                );
+            }
+            if (terminal.kind === 'completed') {
+                return summaryText || 'Sequence completed. No further stages are scheduled.';
+            }
+            if (terminal.kind === 'dismissed') {
+                return summaryText || 'Abandoned salvage row dismissed after operator review.';
+            }
+            return summaryText || `${statusMeta?.label || 'Sequence'} is not active.`;
+        }
+
         function outboundSequenceLeadTitle(row) {
             const lead = row?.lead && typeof row.lead === 'object' ? row.lead : {};
             return String(lead.name || row?.leadPhone || 'Lead').trim() || 'Lead';
@@ -9062,31 +9105,44 @@
             const handoff = payload?.handoff && typeof payload.handoff === 'object' ? payload.handoff : {};
             const configStages = Array.isArray(seq?.stages) ? seq.stages : [];
             const statusMeta = outboundSequenceStatusMeta(row);
+            const terminal = outboundSequenceTerminalState(row, handoff);
             const title = outboundSequenceLeadTitle({ ...row, lead });
             const displayPhone = String(row?.leadPhone || '').trim() || '—';
-            const nextLine = nextQueue
-                ? `Next queued: <strong>${escapeHtml(nextQueue.status || 'pending')}</strong> · ${escapeHtml(nextQueue.scheduledFor ? formatRelativeWithAbsolute(nextQueue.scheduledFor, tz) : '—')}`
-                : 'Next queued: —';
-            const nextMeta = nextQueue
-                ? `<div class="tom-ab-test-meta">Queue details: triggerType=<code>${escapeHtml(nextQueue.triggerType || '—')}</code> · stageId=<code>${escapeHtml(nextQueue.stageId || '—')}</code> · prevCallId=<code>${escapeHtml(nextQueue.prevCallId || '—')}</code></div>`
-                : '';
+            const nextLine = terminal.terminal
+                ? 'Next queued: <strong>None</strong> <span class="tom-ab-test-meta">(sequence is not active)</span>'
+                : nextQueue
+                    ? `Next queued: <strong>${escapeHtml(nextQueue.status || 'pending')}</strong> · ${escapeHtml(nextQueue.scheduledFor ? formatRelativeWithAbsolute(nextQueue.scheduledFor, tz) : '—')}`
+                    : 'Next queued: —';
+            const nextMeta =
+                !terminal.terminal && nextQueue
+                    ? `<div class="tom-ab-test-meta">Queue details: triggerType=<code>${escapeHtml(nextQueue.triggerType || '—')}</code> · stageId=<code>${escapeHtml(nextQueue.stageId || '—')}</code> · prevCallId=<code>${escapeHtml(nextQueue.prevCallId || '—')}</code></div>`
+                    : '';
 
             const gate = explain?.completionGate || {};
             const gateReasons = [];
-            if (gate.outcomeExcluded === true) gateReasons.push('last call outcome is excluded from progression');
-            if (gate.capExceeded === true) gateReasons.push('total dial cap is exhausted');
-            if (gate.durationExceeded === true) gateReasons.push('sequence duration limit is exhausted');
-            if (Array.isArray(explain?.currentStage?.requiredFieldsStatus) && explain.currentStage.requiredFieldsStatus.some((it) => it.present !== true)) {
-                gateReasons.push('required fields are still missing');
+            if (!terminal.terminal) {
+                if (gate.outcomeExcluded === true) gateReasons.push('last call outcome is excluded from progression');
+                if (gate.capExceeded === true) gateReasons.push('total dial cap is exhausted');
+                if (gate.durationExceeded === true) gateReasons.push('sequence duration limit is exhausted');
+                if (
+                    Array.isArray(explain?.currentStage?.requiredFieldsStatus) &&
+                    explain.currentStage.requiredFieldsStatus.some((it) => it.present !== true)
+                ) {
+                    gateReasons.push('required fields are still missing');
+                }
             }
-            const gateSummary = gateReasons.length
-                ? gateReasons.join(' · ')
-                : (row?.status === 'active' ? 'No obvious blocker in stored data; next progression depends on the next eligible call outcome.' : `${statusMeta.label} leads do not currently have another stage queued.`);
+            const gateSummary = terminal.terminal
+                ? outboundSequenceTerminalSummary(terminal, handoff, statusMeta)
+                : gateReasons.length
+                    ? gateReasons.join(' · ')
+                    : row?.status === 'active'
+                        ? 'No obvious blocker in stored data; next progression depends on the next eligible call outcome.'
+                        : `${statusMeta.label} leads do not currently have another stage queued.`;
 
             const reqStatus = Array.isArray(explain?.currentStage?.requiredFieldsStatus)
                 ? explain.currentStage.requiredFieldsStatus
                 : [];
-            const reqHtml = reqStatus.length
+            let reqHtml = reqStatus.length
                 ? `<ul style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${
                     reqStatus.map((it) => {
                         const ok = it.present === true;
@@ -9097,12 +9153,30 @@
                 }</ul>`
                 : '<div class="tom-ab-test-meta" style="margin-top:6px;">No requiredFields configured for this stage (or sequence disabled).</div>';
 
+            if (terminal.terminal) {
+                reqHtml =
+                    terminal.kind === 'stopped'
+                        ? '<div class="tom-ab-test-meta" style="margin-top:6px;line-height:1.45;">Operator stop — missing fields on the current stage no longer block automated progression. Use handoff context and call history for follow-up.</div>'
+                        : '<div class="tom-ab-test-meta" style="margin-top:6px;line-height:1.45;">Sequence is not active — required-field gates apply only while the sequence is running.</div>';
+            }
+
             const stageGraph = renderOutboundSequenceStageGraph(configStages, row.currentStageId || '');
 
             const lastOutcome = explain?.lastOutcome || null;
+            const nextStageScheduledLine = terminal.terminal
+                ? 'Next stage scheduled: <strong>None</strong>'
+                : `Next stage scheduled: <strong>${escapeHtml(row.nextStageScheduledFor ? formatRelativeWithAbsolute(row.nextStageScheduledFor, tz) : '—')}</strong>`;
+            const whatNextLabel = terminal.terminal ? 'Sequence status' : 'What happens next';
             const lastOutcomeLine = lastOutcome
                 ? `<div class="tom-ab-test-meta">Last call: outcome=<code>${escapeHtml(lastOutcome.outcome || '—')}</code> · status=<code>${escapeHtml(lastOutcome.status || '—')}</code> · duration=${escapeHtml(String(lastOutcome.duration ?? '—'))}s · ${escapeHtml(lastOutcome.createdAt ? formatRelativeWithAbsolute(lastOutcome.createdAt, tz) : '')}</div>`
-                : '<div class="tom-ab-test-meta">Last call: —</div>';
+                : terminal.terminal
+                    ? '<div class="tom-ab-test-meta">Last call: none linked on sequence state (check call history below).</div>'
+                    : '<div class="tom-ab-test-meta">Last call: —</div>';
+            const reqFieldsLabel = terminal.terminal
+                ? terminal.kind === 'stopped'
+                    ? 'Stage capture at stop (informational)'
+                    : 'Required fields (sequence inactive)'
+                : 'Required fields for current stage';
             const fact = (label, value) => `
                 <dl class="outreach-strip-fact">
                     <dt>${escapeHtml(label)}</dt>
@@ -9163,10 +9237,10 @@
                     ${journeyActions}
                     ${stageGraph ? `<div><div class="meta-label" style="margin-bottom:6px;">Sequence path</div>${stageGraph}</div>` : ''}
                     <div class="outbound-seq-detail-block">
-                        <div class="meta-label">What happens next</div>
+                        <div class="meta-label">${escapeHtml(whatNextLabel)}</div>
                         <div class="tom-ab-test-meta" style="line-height:1.45;">${escapeHtml(gateSummary)}</div>
                         <div class="tom-ab-test-meta">${nextLine}</div>
-                        <div class="tom-ab-test-meta">Next stage scheduled: <strong>${escapeHtml(row.nextStageScheduledFor ? formatRelativeWithAbsolute(row.nextStageScheduledFor, tz) : '—')}</strong></div>
+                        <div class="tom-ab-test-meta">${nextStageScheduledLine}</div>
                         ${nextMeta}
                         ${lastOutcomeLine}
                     </div>
@@ -9176,7 +9250,7 @@
                         ${handoff.updatedAt ? `<div class="tom-ab-test-meta">Handoff updated ${escapeHtml(formatRelativeWithAbsolute(handoff.updatedAt, tz))}${handoff.source ? ` · source=${escapeHtml(handoff.source)}` : ''}</div>` : ''}
                     </div>
                     <div class="outbound-seq-detail-block">
-                        <div class="meta-label">Required fields for current stage</div>
+                        <div class="meta-label">${escapeHtml(reqFieldsLabel)}</div>
                         ${reqHtml}
                     </div>
                     <div class="outbound-seq-detail-block">
