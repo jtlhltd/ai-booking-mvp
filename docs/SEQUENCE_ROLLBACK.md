@@ -27,6 +27,16 @@ WHERE client_key = 'd2d-xpress-tom';
 
 Set environment variable `OUTBOUND_SEQUENCE_DISABLED=1` and restart workers.
 
+**Per-lead LLM stage scripts (optional)**
+
+Enable contextual openers/system prompts per sequence dial:
+
+- `SEQUENCE_LLM_SCRIPTS=1`
+- `OPENAI_API_KEY=<key>` (server-side; not sent to Vapi)
+- Optional: `SEQUENCE_SCRIPT_LLM_MODEL=gpt-4o-mini` (default)
+
+Disable by unsetting `SEQUENCE_LLM_SCRIPTS` or removing `OPENAI_API_KEY` — dials fall back to static stage JSON from `outbound_sequence_json`. Check Vapi call metadata: `sequenceScriptSource` is `llm` or `static`.
+
 **Notes on the Tom seed**
 
 - The Tom seed migration only writes when `outbound_sequence_json IS NULL`. The two SQL flips above (Postgres / SQLite) survive restarts.

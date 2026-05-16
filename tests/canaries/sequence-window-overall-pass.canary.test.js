@@ -23,6 +23,7 @@ describe('canary: sequence window overall pass', () => {
     expect(visibility).toMatch(/enrollable-leads/);
     expect(visibility).toMatch(/computeLeadEnrollmentStats/);
     expect(visibility).toMatch(/sequenceRowStuckHint/);
+    expect(visibility).toMatch(/shouldIncludeLeadInSequenceStateList/);
     expect(queueFirst).toMatch(/operator_sequence_enroll/);
     expect(dashboard).toMatch(/outboundSequenceListModeFilters/);
     expect(dashboard).toMatch(/enrollable-leads/);

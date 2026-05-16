@@ -29,3 +29,7 @@
 ## Risk & rollback
 
 - `queueNow` only enqueues when explicitly requested; revert commit to disable.
+
+## Amendments
+
+- **2026-05-15**: `/outbound-sequence/:clientKey/leads` listed every `lead_sequence_state` row, so **stopped/abandoned rows still appeared after unenroll** (`sequenceOptedIn: false`). Filter: show row only if opted in or `status=active` (`lib/outbound-sequence-state-list-include.js`).

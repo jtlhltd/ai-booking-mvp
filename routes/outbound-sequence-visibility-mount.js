@@ -11,6 +11,7 @@ import {
   SEQUENCE_COMPLETED_HANDOFF_SOURCE,
 } from '../lib/dashboard-follow-up-filters.js';
 import { isLeadExplicitlyOptedIntoOutboundSequence } from '../lib/lead-dial-context.js';
+import { shouldIncludeLeadInSequenceStateList } from '../lib/outbound-sequence-state-list-include.js';
 
 export function createOutboundSequenceVisibilityRouter(deps) {
   const { query, getFullClient, isPostgres, phoneMatchKey } = deps || {};
@@ -511,6 +512,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
             sequenceOptedIn: context?.sequenceOptedIn === true,
           };
         })
+        .filter((row) => shouldIncludeLeadInSequenceStateList(row))
         .filter((row) => matchesDashboardCohort({ cohort: row?.dashboardCohort }, filter));
       const queueMap = await loadPendingSequenceQueueMap(
         clientKey,
