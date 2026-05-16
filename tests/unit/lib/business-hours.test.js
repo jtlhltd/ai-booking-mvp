@@ -82,6 +82,16 @@ describe('business-hours invariants', () => {
     expect(isBusinessHoursForTenant(tenant, sunday10, 'Europe/London', { forOutboundDial: true })).toBe(true);
   });
 
+  test('ALLOW_OUTBOUND_WEEKEND_CALLS adds Sat/Sun to default Mon–Fri outbound days', async () => {
+    const { isBusinessHoursForTenant } = await import('../../../lib/business-hours.js');
+    const tenant = { booking: { timezone: 'Europe/London' } };
+    const saturdayNoon = DateTime.fromISO('2026-04-18T12:00:00', { zone: 'Europe/London' }).toJSDate();
+
+    expect(isBusinessHoursForTenant(tenant, saturdayNoon, 'Europe/London', { forOutboundDial: true })).toBe(false);
+    process.env.ALLOW_OUTBOUND_WEEKEND_CALLS = '1';
+    expect(isBusinessHoursForTenant(tenant, saturdayNoon, 'Europe/London', { forOutboundDial: true })).toBe(true);
+  });
+
   test('UK bank holiday forces closed', async () => {
     const { isBusinessHoursForTenant } = await import('../../../lib/business-hours.js');
     const tenant = { booking: { timezone: 'Europe/London' } };
