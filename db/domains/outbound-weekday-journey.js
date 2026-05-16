@@ -136,6 +136,10 @@ export function createOutboundWeekdayJourneyDomain({
         : DateTime.now().setZone(tz);
     const dayBit = tenantLocalWeekdayBitLuxon(local.weekday);
     if (!dayBit) {
+      const { allowOutboundWeekendCalls } = await import('../../lib/business-hours.js');
+      if (allowOutboundWeekendCalls()) {
+        return { ok: true, reason: 'weekend_outbound_env' };
+      }
       return { ok: false, reason: 'not_weekday' };
     }
 
