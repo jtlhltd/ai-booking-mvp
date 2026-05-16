@@ -63,6 +63,50 @@ describe('setLeadOutboundSequenceEnrollment', () => {
     expect(out).toEqual({ ok: false, error: 'tenant_sequence_disabled' });
   });
 
+  test('queueNow enqueues first stage when RETURNING row uses leadDialContextJson alias', async () => {
+    const addToCallQueue = jest.fn(async () => ({}));
+    const query = jest.fn(async (sql) => {
+      if (String(sql).includes('SELECT id')) {
+        return { rows: [{ id: 9, phone: '+447700900111', leadDialContextJson: { crmCampaign: 'x' } }] };
+      }
+      return {
+        rows: [{
+          id: 9,
+          phone: '+447700900111',
+          leadDialContextJson: { variableValues: { outboundSequenceOptIn: true } },
+        }],
+      };
+    });
+    const out = await setLeadOutboundSequenceEnrollment({
+      clientKey: 'c1',
+      leadPhone: '+447700900111',
+      enrolled: true,
+      queueNow: true,
+      query,
+      addToCallQueue,
+      insertLeadSequenceState: jest.fn(async () => ({})),
+      getFullClient: async () => ({
+        outboundSequence: {
+          enabled: true,
+          stages: [{
+            id: 's1',
+            firstMessage: 'Hi',
+            systemMessage: 'Sys',
+            requiredFields: ['decisionMakerName'],
+            maxAttemptsInStage: 2,
+            isFinal: true,
+          }],
+        },
+      }),
+      isBusinessHours: () => true,
+    });
+    expect(out.ok).toBe(true);
+    expect(out.queuedFirstStage).toBe(true);
+    expect(addToCallQueue).toHaveBeenCalledTimes(1);
+    expect(addToCallQueue.mock.calls[0][0].callData.stageId).toBe('s1');
+    expect(addToCallQueue.mock.calls[0][0].callData.outboundDialMode).toBe('sequence');
+  });
+
   test('unenroll stops active sequence', async () => {
     const query = jest.fn(async (sql) => {
       if (String(sql).includes('SELECT id')) {
