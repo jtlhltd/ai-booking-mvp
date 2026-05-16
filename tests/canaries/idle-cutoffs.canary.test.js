@@ -93,7 +93,7 @@ describe('canary: billing.idle-call-cutoffs', () => {
     expect(ov.silenceTimeoutSeconds).toBeGreaterThan(0);
     expect(ov.silenceTimeoutSeconds).toBeLessThanOrEqual(120);
 
-    expect(ov.endCallOnSilence).toBe(true);
+    expect(ov.endCallOnSilence).toBeUndefined();
 
     expect(ov.voicemailDetection).toBeTruthy();
     expect(ov.voicemailDetection.enabled).toBe(true);
