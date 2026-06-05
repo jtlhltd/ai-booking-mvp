@@ -22,6 +22,9 @@ CREATE INDEX IF NOT EXISTS idx_appointment_reminders_appointment_id ON appointme
 CREATE INDEX IF NOT EXISTS idx_appointment_reminders_client_key ON appointment_reminders(client_key);
 CREATE INDEX IF NOT EXISTS idx_appointment_reminders_scheduled_for ON appointment_reminders(scheduled_for);
 CREATE INDEX IF NOT EXISTS idx_appointment_reminders_status ON appointment_reminders(status);
+CREATE INDEX IF NOT EXISTS idx_appointment_reminders_pending_due
+  ON appointment_reminders(status, scheduled_for)
+  WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_appointment_reminders_type ON appointment_reminders(reminder_type);
 
 -- Add reminder settings to clients table

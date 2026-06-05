@@ -58,6 +58,143 @@ describe('query-performance-tracker', () => {
     expect(sendCriticalAlert).toHaveBeenCalled();
   });
 
+  test('trackQueryPerformance skips call_queue stale self-heal (pool wait, not SQL)', async () => {
+    query.mockResolvedValue({});
+    const { trackQueryPerformance } = await import('../../../lib/query-performance-tracker.js');
+    const r = await trackQueryPerformance(
+      `WITH stale AS (
+        SELECT id FROM call_queue
+        WHERE status = 'processing' AND updated_at < NOW() - INTERVAL '10 minutes'
+        ORDER BY updated_at ASC LIMIT 500
+      )
+      UPDATE call_queue cq SET status = 'pending', updated_at = NOW()
+      FROM stale WHERE cq.id = stale.id`,
+      8000
+    );
+    expect(r).toBeNull();
+    await flushSetImmediate();
+    await Promise.resolve();
+    expect(sendCriticalAlert).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test('trackQueryPerformance skips tenants full config read (pool wait, not SQL)', async () => {
+    query.mockResolvedValue({});
+    const { trackQueryPerformance } = await import('../../../lib/query-performance-tracker.js');
+    const r = await trackQueryPerformance(
+      `SELECT client_key, display_name, timezone, locale,
+         numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json,
+         white_label_config, outbound_sequence_json, is_enabled, created_at
+       FROM tenants WHERE client_key = $1`,
+      8000
+    );
+    expect(r).toBeNull();
+    await flushSetImmediate();
+    await Promise.resolve();
+    expect(sendCriticalAlert).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test('trackQueryPerformance skips ops invariants call_queue bounds check (pool wait, not SQL)', async () => {
+    query.mockResolvedValue({});
+    const { trackQueryPerformance } = await import('../../../lib/query-performance-tracker.js');
+    const r = await trackQueryPerformance(
+      `WITH bounds AS (
+        SELECT
+          ((date_trunc('day', NOW() AT TIME ZONE $2) + INTERVAL '1 day') AT TIME ZONE $2) AS t0,
+          ((date_trunc('day', NOW() AT TIME ZONE $2) + INTERVAL '2 day') AT TIME ZONE $2) AS t1
+      )
+      SELECT COALESCE(MAX(c), 0)::int AS max_per_exact_hour
+      FROM (
+        SELECT scheduled_for, COUNT(*)::int AS c
+        FROM call_queue cq
+        CROSS JOIN bounds b
+        WHERE cq.client_key = $1
+          AND cq.call_type = 'vapi_call'
+          AND cq.status = 'pending'
+          AND cq.scheduled_for >= b.t0
+          AND cq.scheduled_for < b.t1
+          AND EXTRACT(MINUTE FROM (cq.scheduled_for AT TIME ZONE $2)) = 0
+          AND EXTRACT(SECOND FROM (cq.scheduled_for AT TIME ZONE $2)) = 0
+        GROUP BY 1
+      ) x`,
+      8000
+    );
+    expect(r).toBeNull();
+    await flushSetImmediate();
+    await Promise.resolve();
+    expect(sendCriticalAlert).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test('trackQueryPerformance skips retry_queue appointment_reminder due poll (pool wait, not SQL)', async () => {
+    query.mockResolvedValue({});
+    const { trackQueryPerformance } = await import('../../../lib/query-performance-tracker.js');
+    const r = await trackQueryPerformance(
+      `WITH picked AS (
+        SELECT id FROM retry_queue
+        WHERE retry_reason LIKE 'appointment\\_reminder%' ESCAPE '\\'
+          AND status = 'pending'
+          AND scheduled_for <= NOW() + ($1::int * INTERVAL '1 minute')
+        ORDER BY scheduled_for ASC LIMIT 50
+      )
+      SELECT rq.id FROM retry_queue rq INNER JOIN picked p ON p.id = rq.id`,
+      8000
+    );
+    expect(r).toBeNull();
+    await flushSetImmediate();
+    await Promise.resolve();
+    expect(sendCriticalAlert).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test('trackQueryPerformance skips webhook retry_queue due poll (pool wait, not SQL)', async () => {
+    query.mockResolvedValue({});
+    const { trackQueryPerformance } = await import('../../../lib/query-performance-tracker.js');
+    const r = await trackQueryPerformance(
+      `SELECT * FROM retry_queue
+       WHERE retry_type LIKE 'webhook_%' AND status = 'pending'
+         AND scheduled_for <= NOW() AND retry_attempt <= max_retries
+       ORDER BY scheduled_for ASC LIMIT 10`,
+      8000
+    );
+    expect(r).toBeNull();
+    await flushSetImmediate();
+    await Promise.resolve();
+    expect(sendCriticalAlert).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test('trackQueryPerformance skips rate_limit_tracking cleanup DELETE (pool wait, not SQL)', async () => {
+    query.mockResolvedValue({});
+    const { trackQueryPerformance } = await import('../../../lib/query-performance-tracker.js');
+    const r = await trackQueryPerformance(
+      `DELETE FROM rate_limit_tracking WHERE window_start < now() - interval '24 hours'`,
+      8000
+    );
+    expect(r).toBeNull();
+    await flushSetImmediate();
+    await Promise.resolve();
+    expect(sendCriticalAlert).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test('trackQueryPerformance skips appointment_reminders pending poll (pool wait, not SQL)', async () => {
+    query.mockResolvedValue({});
+    const { trackQueryPerformance } = await import('../../../lib/query-performance-tracker.js');
+    const r = await trackQueryPerformance(
+      `SELECT * FROM appointment_reminders
+       WHERE status = 'pending' AND scheduled_for <= NOW()
+       ORDER BY scheduled_for ASC LIMIT 50`,
+      8000
+    );
+    expect(r).toBeNull();
+    await flushSetImmediate();
+    await Promise.resolve();
+    expect(sendCriticalAlert).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
   test('getSlowQueries maps rows', async () => {
     query.mockResolvedValueOnce({
       rows: [
