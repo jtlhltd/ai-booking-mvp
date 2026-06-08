@@ -1183,7 +1183,11 @@ registerMainHttpRoutes.leadsFollowups(app, {
 // moved: GET /api/realtime/stats → routes/runtime-metrics-mount.js
 
 // Demo/setup routes → routes/demo-setup.js
-registerMainHttpRoutes.demoSetupAndErrorHandler(app, { demoSetupRouter, errorHandler });
+registerMainHttpRoutes.demoSetupAndErrorHandler(app, {
+  demoSetupRouter,
+  errorHandler,
+  setupSentryExpressErrorHandler: (await import('./lib/sentry.js')).setupSentryExpressErrorHandler,
+});
 
 // Initialize database and start server - FIXED: braces properly balanced
 async function startServer() {

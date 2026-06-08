@@ -70,12 +70,18 @@ export function installShutdownHandlers({
   // Handle uncaught exceptions
   process.on('uncaughtException', (error) => {
     console.error('[FATAL] Uncaught exception:', error);
+    import('../lib/sentry.js')
+      .then(({ captureException }) => captureException(error, { signal: 'uncaughtException', fatal: true }))
+      .catch(() => {});
     gracefulShutdown('UNCAUGHT_EXCEPTION');
   });
 
   // Handle unhandled promise rejections
   process.on('unhandledRejection', (reason, promise) => {
     console.error('[FATAL] Unhandled rejection at:', promise, 'reason:', reason);
+    import('../lib/sentry.js')
+      .then(({ captureException }) => captureException(reason, { signal: 'unhandledRejection', fatal: true }))
+      .catch(() => {});
     gracefulShutdown('UNHANDLED_REJECTION');
   });
 

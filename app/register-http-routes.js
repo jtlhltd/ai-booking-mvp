@@ -86,6 +86,9 @@ export function registerLeadsFollowupsMount(app, p) {
 
 export function registerDemoSetupAndErrorHandler(app, p) {
   app.use(p.demoSetupRouter);
+  if (p.setupSentryExpressErrorHandler) {
+    p.setupSentryExpressErrorHandler(app);
+  }
   app.use(p.errorHandler);
 }
 

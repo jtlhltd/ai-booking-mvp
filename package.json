@@ -5,10 +5,10 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "render-start": "node run-migration.js && node server.js",
+    "start": "node --import ./instrument.mjs server.js",
+    "render-start": "node run-migration.js && node --import ./instrument.mjs server.js",
     "render-build": "npm run build",
-    "dev": "node server.js",
+    "dev": "node --import ./instrument.mjs server.js",
     "build": "vite build",
     "preview": "vite preview",
     "migrate": "node run-migration.js",
@@ -37,6 +37,7 @@
     "postrelease": "git push --follow-tags origin main"
   },
   "dependencies": {
+    "@sentry/node": "^10.56.0",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^9.6.0",
