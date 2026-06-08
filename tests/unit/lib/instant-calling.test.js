@@ -60,6 +60,26 @@ jest.unstable_mockModule('../../../lib/realtime-events.js', () => ({
   emitCallStarted: jest.fn()
 }));
 
+const getValidatedOutboundSequence = jest.fn(() => null);
+const getStageById = jest.fn();
+const buildAssistantOverridesForStage = jest.fn();
+const isOutboundSequenceGloballyDisabled = jest.fn(() => true);
+const resolveSequenceStageAssistantOverrides = jest.fn(async () => ({
+  overrides: {},
+  scriptSource: 'static'
+}));
+
+jest.unstable_mockModule('../../../lib/outbound-sequence.js', () => ({
+  getValidatedOutboundSequence,
+  getStageById,
+  buildAssistantOverridesForStage,
+  isOutboundSequenceGloballyDisabled
+}));
+
+jest.unstable_mockModule('../../../lib/outbound-sequence-script-llm.js', () => ({
+  resolveSequenceStageAssistantOverrides
+}));
+
 describe('instant-calling', () => {
   const savedEnv = { ...process.env };
 
@@ -78,6 +98,17 @@ describe('instant-calling', () => {
     process.env.VAPI_SLOT_WAIT_MS = '5000';
     delete process.env.VAPI_CONCURRENCY_RELEASE_UNKNOWN;
     delete process.env.SENTRY_DSN;
+    getValidatedOutboundSequence.mockReset();
+    getValidatedOutboundSequence.mockReturnValue(null);
+    getStageById.mockReset();
+    buildAssistantOverridesForStage.mockReset();
+    isOutboundSequenceGloballyDisabled.mockReset();
+    isOutboundSequenceGloballyDisabled.mockReturnValue(true);
+    resolveSequenceStageAssistantOverrides.mockReset();
+    resolveSequenceStageAssistantOverrides.mockResolvedValue({
+      overrides: {},
+      scriptSource: 'static'
+    });
   });
 
   afterEach(() => {
@@ -210,30 +241,19 @@ describe('instant-calling', () => {
   });
 
   test('callLeadInstantly applies leadDialContext as the final scalar-only variableValues overlay', async () => {
-    jest.unstable_mockModule('../../../lib/outbound-sequence.js', () => ({
-      getValidatedOutboundSequence: jest.fn(() => ({ enabled: true })),
-      getStageById: jest.fn(() => ({ id: 'stage-1', isFinal: false })),
-      buildAssistantOverridesForStage: jest.fn(() => ({
+    getValidatedOutboundSequence.mockReturnValue({ enabled: true });
+    getStageById.mockReturnValue({ id: 'stage-1', isFinal: false });
+    isOutboundSequenceGloballyDisabled.mockReturnValue(false);
+    resolveSequenceStageAssistantOverrides.mockResolvedValue({
+      overrides: {
         variableValues: {
           lane: 'from_sequence',
           leadName: 'Seq Name',
           seqOnly: 'kept'
         }
-      })),
-      isOutboundSequenceGloballyDisabled: jest.fn(() => false)
-    }));
-    jest.unstable_mockModule('../../../lib/outbound-sequence-script-llm.js', () => ({
-      resolveSequenceStageAssistantOverrides: jest.fn(async () => ({
-        overrides: {
-          variableValues: {
-            lane: 'from_sequence',
-            leadName: 'Seq Name',
-            seqOnly: 'kept'
-          }
-        },
-        scriptSource: 'static'
-      }))
-    }));
+      },
+      scriptSource: 'static'
+    });
     getLeadSequenceState.mockResolvedValueOnce({
       attemptsTotal: 1,
       stagesCompleted: []
@@ -283,14 +303,13 @@ describe('instant-calling', () => {
   });
 
   test('callLeadInstantly applies lead firstMessage and systemMessage after sequence merges', async () => {
-    jest.unstable_mockModule('../../../lib/outbound-sequence.js', () => ({
-      getValidatedOutboundSequence: jest.fn(() => ({ enabled: true })),
-      getStageById: jest.fn(() => ({ id: 'stage-1', isFinal: false })),
-      buildAssistantOverridesForStage: jest.fn(() => ({
+    getValidatedOutboundSequence.mockReturnValue({ enabled: true });
+    getStageById.mockReturnValue({ id: 'stage-1', isFinal: false });
+    isOutboundSequenceGloballyDisabled.mockReturnValue(false);
+    resolveSequenceStageAssistantOverrides.mockResolvedValue({
+      overrides: {
         firstMessage: 'Stage hello',
-        variableValues: {
-          lane: 'from_sequence',
-        },
+        variableValues: { lane: 'from_sequence' },
         model: {
           provider: 'openai',
           model: 'gpt-4o-mini',
@@ -298,25 +317,9 @@ describe('instant-calling', () => {
           maxTokens: 300,
           messages: [{ role: 'system', content: 'Stage script' }]
         }
-      })),
-      isOutboundSequenceGloballyDisabled: jest.fn(() => false)
-    }));
-    jest.unstable_mockModule('../../../lib/outbound-sequence-script-llm.js', () => ({
-      resolveSequenceStageAssistantOverrides: jest.fn(async () => ({
-        overrides: {
-          firstMessage: 'Stage hello',
-          variableValues: { lane: 'from_sequence' },
-          model: {
-            provider: 'openai',
-            model: 'gpt-4o-mini',
-            temperature: 0.7,
-            maxTokens: 300,
-            messages: [{ role: 'system', content: 'Stage script' }]
-          }
-        },
-        scriptSource: 'static'
-      }))
-    }));
+      },
+      scriptSource: 'static'
+    });
     getLeadSequenceState.mockResolvedValueOnce({
       attemptsTotal: 1,
       stagesCompleted: []
