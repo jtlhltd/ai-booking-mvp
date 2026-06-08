@@ -1,5 +1,5 @@
 ﻿// server.js — AI Booking System (SQLite tenants + env bootstrap + richer tenant awareness)
-import './instrument.mjs';
+// Sentry: load via `node --import ./instrument.mjs` (see package.json start/render-start).
 import 'dotenv/config';
 import { normalizePhoneE164 } from './lib/utils.js';
 import { parseStartPreference } from './lib/start-preference.js';
