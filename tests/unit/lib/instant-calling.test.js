@@ -77,6 +77,7 @@ describe('instant-calling', () => {
     process.env.VAPI_MAX_CONCURRENT = '1';
     process.env.VAPI_SLOT_WAIT_MS = '5000';
     delete process.env.VAPI_CONCURRENCY_RELEASE_UNKNOWN;
+    delete process.env.SENTRY_DSN;
   });
 
   afterEach(() => {
@@ -221,6 +222,18 @@ describe('instant-calling', () => {
       })),
       isOutboundSequenceGloballyDisabled: jest.fn(() => false)
     }));
+    jest.unstable_mockModule('../../../lib/outbound-sequence-script-llm.js', () => ({
+      resolveSequenceStageAssistantOverrides: jest.fn(async () => ({
+        overrides: {
+          variableValues: {
+            lane: 'from_sequence',
+            leadName: 'Seq Name',
+            seqOnly: 'kept'
+          }
+        },
+        scriptSource: 'static'
+      }))
+    }));
     getLeadSequenceState.mockResolvedValueOnce({
       attemptsTotal: 1,
       stagesCompleted: []
@@ -287,6 +300,22 @@ describe('instant-calling', () => {
         }
       })),
       isOutboundSequenceGloballyDisabled: jest.fn(() => false)
+    }));
+    jest.unstable_mockModule('../../../lib/outbound-sequence-script-llm.js', () => ({
+      resolveSequenceStageAssistantOverrides: jest.fn(async () => ({
+        overrides: {
+          firstMessage: 'Stage hello',
+          variableValues: { lane: 'from_sequence' },
+          model: {
+            provider: 'openai',
+            model: 'gpt-4o-mini',
+            temperature: 0.7,
+            maxTokens: 300,
+            messages: [{ role: 'system', content: 'Stage script' }]
+          }
+        },
+        scriptSource: 'static'
+      }))
     }));
     getLeadSequenceState.mockResolvedValueOnce({
       attemptsTotal: 1,
