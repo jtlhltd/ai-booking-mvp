@@ -1,4 +1,5 @@
 ﻿// server.js — AI Booking System (SQLite tenants + env bootstrap + richer tenant awareness)
+import './instrument.mjs';
 import 'dotenv/config';
 import { normalizePhoneE164 } from './lib/utils.js';
 import { parseStartPreference } from './lib/start-preference.js';
