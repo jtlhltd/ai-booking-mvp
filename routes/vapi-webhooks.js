@@ -16,6 +16,7 @@ import {
 import { createVapiRawBodyMiddleware } from '../lib/vapi-webhooks/raw-body-middleware.js';
 import { callStore, CALL_STORE_MAX } from '../lib/vapi-webhooks/conversation-store.js';
 import { processWebhookPayload } from '../lib/vapi-webhooks/process-webhook-payload.js';
+import { captureException, runIsolatedSpan } from '../lib/sentry.js';
 
 const router = express.Router();
 
@@ -136,21 +137,40 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
 
     res.status(200).json({ ok: true, received: true });
 
-    (async () => {
-      try {
-        await markWebhookEventProcessingStarted({ provider: 'vapi', eventId });
-        await processWebhookPayload(body, correlationId);
-        await markWebhookEventProcessed({ provider: 'vapi', eventId });
-      } catch (err) {
-        console.error(`[${correlationId}] [VAPI WEBHOOK] Post-200 processing error:`, err);
-        console.error(`[${correlationId}] [VAPI WEBHOOK] Stack:`, err.stack);
+    runIsolatedSpan(
+      {
+        name: 'vapi.webhook.process_async',
+        op: 'vapi.webhook',
+        attributes: {
+          correlationId,
+          callId: callIdForEvent,
+          eventId,
+          eventType,
+        },
+      },
+      async () => {
         try {
-          await markWebhookEventFailed({ provider: 'vapi', eventId, error: err });
-        } catch (_) {
-          // best effort
+          await markWebhookEventProcessingStarted({ provider: 'vapi', eventId });
+          await processWebhookPayload(body, correlationId);
+          await markWebhookEventProcessed({ provider: 'vapi', eventId });
+        } catch (err) {
+          console.error(`[${correlationId}] [VAPI WEBHOOK] Post-200 processing error:`, err);
+          console.error(`[${correlationId}] [VAPI WEBHOOK] Stack:`, err.stack);
+          captureException(err, {
+            correlationId,
+            callId: callIdForEvent,
+            eventId,
+            eventType,
+            service: 'vapi-webhook',
+          });
+          try {
+            await markWebhookEventFailed({ provider: 'vapi', eventId, error: err });
+          } catch (_) {
+            // best effort
+          }
         }
       }
-    })();
+    );
   } catch (err) {
     console.error(`[${correlationId}] [VAPI WEBHOOK] Handler error (before 200):`, err);
     if (!res.headersSent) res.status(500).json({ ok: false, error: err.message });

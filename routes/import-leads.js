@@ -1,5 +1,6 @@
 import express from 'express';
 import { handleLeadsImport } from '../lib/leads-import.js';
+import { startSpan } from '../lib/sentry.js';
 
 export function createImportLeadsRouter(deps) {
   const {
@@ -85,8 +86,11 @@ export function createImportLeadsRouter(deps) {
   );
 
   router.post('/import-leads/:clientKey', async (req, res) => {
+    const { clientKey } = req.params;
+    return startSpan(
+      { name: 'lead.import.api', op: 'lead.import', attributes: { clientKey } },
+      async () => {
     try {
-      const { clientKey } = req.params;
       const { csvData, columnMapping, autoStartCampaign } = req.body;
 
       if (!csvData) {
@@ -209,6 +213,8 @@ export function createImportLeadsRouter(deps) {
       console.error('[LEAD IMPORT ERROR]', error);
       res.status(500).json({ ok: false, error: error.message });
     }
+      }
+    );
   });
 
   return router;
