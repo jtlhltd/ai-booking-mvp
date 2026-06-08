@@ -41,4 +41,30 @@ describe('routes/health-probes-mount', () => {
     expect(res.body.ok).toBe(false);
     expect(res.body.error).toMatch(/Google env missing/i);
   });
+
+  test('GET /debug-sentry returns 404 unless DEBUG_SENTRY=true', async () => {
+    const prev = process.env.DEBUG_SENTRY;
+    delete process.env.DEBUG_SENTRY;
+    try {
+      const res = await request(buildApp()).get('/debug-sentry');
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('not_found');
+    } finally {
+      if (prev === undefined) delete process.env.DEBUG_SENTRY;
+      else process.env.DEBUG_SENTRY = prev;
+    }
+  });
+
+  test('GET /debug-sentry-trace returns 404 unless DEBUG_SENTRY=true', async () => {
+    const prev = process.env.DEBUG_SENTRY;
+    delete process.env.DEBUG_SENTRY;
+    try {
+      const res = await request(buildApp()).get('/debug-sentry-trace');
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('not_found');
+    } finally {
+      if (prev === undefined) delete process.env.DEBUG_SENTRY;
+      else process.env.DEBUG_SENTRY = prev;
+    }
+  });
 });

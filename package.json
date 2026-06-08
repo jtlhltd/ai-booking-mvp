@@ -5,10 +5,10 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node --import ./instrument.mjs server.js",
-    "render-start": "node run-migration.js && node --import ./instrument.mjs server.js",
+    "start": "node --import @sentry/node/preload --import ./instrument.mjs server.js",
+    "render-start": "node run-migration.js && node --import @sentry/node/preload --import ./instrument.mjs server.js",
     "render-build": "npm run build",
-    "dev": "node --import ./instrument.mjs server.js",
+    "dev": "node --import @sentry/node/preload --import ./instrument.mjs server.js",
     "build": "vite build",
     "preview": "vite preview",
     "migrate": "node run-migration.js",
