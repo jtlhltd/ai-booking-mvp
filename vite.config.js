@@ -1,10 +1,34 @@
 import { defineConfig } from 'vite';
 import path from 'node:path';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
+
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN?.trim();
+const sentryRelease =
+  process.env.RENDER_GIT_COMMIT?.trim()
+  || process.env.SENTRY_RELEASE?.trim()
+  || undefined;
+
+const sentryPlugins = sentryAuthToken
+  ? [
+      sentryVitePlugin({
+        org: 'jtlh-ltd',
+        project: process.env.SENTRY_PROJECT?.trim() || 'ai-booking-mvp',
+        authToken: sentryAuthToken,
+        release: sentryRelease ? { name: sentryRelease } : undefined,
+        sourcemaps: {
+          assets: './public/build/**',
+          filesToDeleteAfterUpload: ['./public/build/**/*.map'],
+        },
+        silent: !process.env.CI,
+      }),
+    ]
+  : [];
 
 export default defineConfig({
   base: '/build/',
   root: path.resolve(process.cwd(), 'frontend'),
   build: {
+    sourcemap: sentryAuthToken ? 'hidden' : false,
     outDir: path.resolve(process.cwd(), 'public/build'),
     emptyOutDir: true,
     rollupOptions: {
@@ -20,6 +44,7 @@ export default defineConfig({
         vapiTestDashboard: path.resolve(process.cwd(), 'frontend/pages/vapi-test-dashboard/index.html')
       }
     }
-  }
+  },
+  plugins: sentryPlugins,
 });
 

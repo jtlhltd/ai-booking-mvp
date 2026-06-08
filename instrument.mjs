@@ -15,9 +15,15 @@ if (!dsn) {
     ? parsedSampleRate
     : (environment === 'production' ? 0.1 : 1.0);
 
+  const release =
+    process.env.SENTRY_RELEASE?.trim()
+    || process.env.RENDER_GIT_COMMIT?.trim()
+    || undefined;
+
   Sentry.init({
     dsn,
     environment,
+    release,
     tracesSampleRate,
     initialScope: {
       tags: {
