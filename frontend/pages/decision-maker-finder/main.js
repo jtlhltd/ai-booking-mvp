@@ -1,4 +1,7 @@
+import { initBrowserSentry } from '../../shared/sentry.js';
 import './styles.css';
+
+initBrowserSentry();
 
 const API_BASE = window.location.origin;
 let searchResults = [];

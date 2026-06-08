@@ -1,3 +1,7 @@
+import { initBrowserSentry } from '../../shared/sentry.js';
+
+initBrowserSentry();
+
 const API_BASE = window.location.origin;
 
 function getApiKey() {

@@ -55,6 +55,18 @@ describe('routes/health-probes-mount', () => {
     }
   });
 
+  test('GET /api/public/sentry-config returns 204 when Sentry is unset', async () => {
+    const prev = process.env.SENTRY_DSN;
+    delete process.env.SENTRY_DSN;
+    try {
+      const res = await request(buildApp()).get('/api/public/sentry-config');
+      expect(res.status).toBe(204);
+    } finally {
+      if (prev === undefined) delete process.env.SENTRY_DSN;
+      else process.env.SENTRY_DSN = prev;
+    }
+  });
+
   test('GET /debug-sentry-trace returns 404 unless DEBUG_SENTRY=true', async () => {
     const prev = process.env.DEBUG_SENTRY;
     delete process.env.DEBUG_SENTRY;

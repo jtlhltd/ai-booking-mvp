@@ -41,4 +41,31 @@ describe('sentry-config', () => {
     expect(resolveSentryEnvironment({ RENDER: 'true' })).toBe('production');
     expect(resolveSentryEnvironment({ SENTRY_ENVIRONMENT: 'staging', RENDER: 'true' })).toBe('staging');
   });
+
+  it('buildPublicSentryConfig returns null without DSN', async () => {
+    const { buildPublicSentryConfig } = await import('../../../lib/sentry-config.js');
+    expect(buildPublicSentryConfig({})).toBeNull();
+  });
+
+  it('buildPublicSentryConfig exposes browser-safe fields', async () => {
+    const { buildPublicSentryConfig } = await import('../../../lib/sentry-config.js');
+    const config = buildPublicSentryConfig({
+      SENTRY_DSN: 'https://example@o0.ingest.sentry.io/0',
+      SENTRY_ENVIRONMENT: 'production',
+      APP_NAME: 'ai-booking-mvp',
+    });
+    expect(config).toMatchObject({
+      dsn: 'https://example@o0.ingest.sentry.io/0',
+      environment: 'production',
+      tracesSampleRate: 0.1,
+      app: 'ai-booking-mvp',
+      replaysOnErrorSampleRate: 1.0,
+    });
+  });
+
+  it('isLowValueTraceTarget matches probe routes', async () => {
+    const { isLowValueTraceTarget } = await import('../../../lib/sentry-config.js');
+    expect(isLowValueTraceTarget('GET /healthz')).toBe(true);
+    expect(isLowValueTraceTarget('GET /api/client-dashboard/foo')).toBe(false);
+  });
 });

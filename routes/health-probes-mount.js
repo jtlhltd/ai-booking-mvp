@@ -2,6 +2,7 @@ import express from 'express';
 import * as Sentry from '@sentry/node';
 import { handleHealthz } from '../lib/healthz.js';
 import { handleGcalPing } from '../lib/gcal-ping.js';
+import { buildPublicSentryConfig } from '../lib/sentry-config.js';
 import { isSentryEnabled } from '../lib/sentry.js';
 
 /**
@@ -13,6 +14,15 @@ export function createHealthProbesRouter(deps) {
 
   router.get('/healthz', (req, res) => handleHealthz(req, res, healthzDeps));
   router.get('/gcal/ping', (req, res) => handleGcalPing(req, res, gcalPingDeps));
+
+  router.get('/api/public/sentry-config', (_req, res) => {
+    const config = buildPublicSentryConfig();
+    if (!config) {
+      return res.status(204).end();
+    }
+    res.set('Cache-Control', 'private, max-age=300');
+    return res.json(config);
+  });
 
   router.get('/debug-sentry', (req, res, next) => {
     if (process.env.DEBUG_SENTRY !== 'true') {

@@ -1,4 +1,7 @@
+import { initBrowserSentry } from '../../shared/sentry.js';
 import './styles.css';
+
+initBrowserSentry();
 import { el, mount } from '../../shared/dom.js';
 import { renderLeadsCard } from './widgets/leads.js';
 import { renderCallsCard } from './widgets/calls.js';

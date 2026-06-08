@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import * as Sentry from '@sentry/node';
 import {
+  isLowValueTraceTarget,
   resolveSentryEnvironment,
   resolveSentryTracesSampleRate,
 } from './lib/sentry-config.js';
@@ -25,6 +26,10 @@ if (!dsn) {
     environment,
     release,
     tracesSampleRate,
+    tracesSampler: ({ name, inheritOrSampleWith }) => {
+      if (isLowValueTraceTarget(name)) return 0;
+      return inheritOrSampleWith(tracesSampleRate);
+    },
     initialScope: {
       tags: {
         app: process.env.APP_NAME?.trim() || 'ai-booking-mvp',

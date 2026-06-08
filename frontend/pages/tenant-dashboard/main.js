@@ -1,3 +1,7 @@
+import { initBrowserSentry } from '../../shared/sentry.js';
+
+initBrowserSentry();
+
 const BASE_URL = window.location.origin;
 let currentTenant = null;
 let tenants = [];

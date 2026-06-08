@@ -1,4 +1,7 @@
+import { initBrowserSentry } from '../../shared/sentry.js';
 import { apiGetJson } from '../../shared/api.js';
+
+initBrowserSentry();
 import { el, mount } from '../../shared/dom.js';
 import '../client-dashboard/styles.css';
 import './styles.css';

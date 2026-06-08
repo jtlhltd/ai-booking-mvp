@@ -34,9 +34,11 @@
     "release:patch": "standard-version --release-as patch",
     "release:minor": "standard-version --release-as minor",
     "release:major": "standard-version --release-as major",
-    "postrelease": "git push --follow-tags origin main"
+    "postrelease": "git push --follow-tags origin main",
+    "setup:sentry-alerts": "node scripts/setup-sentry-alerts.mjs"
   },
   "dependencies": {
+    "@sentry/browser": "^10.56.0",
     "@sentry/node": "^10.56.0",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",

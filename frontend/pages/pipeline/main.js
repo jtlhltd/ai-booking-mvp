@@ -1,3 +1,7 @@
+import { initBrowserSentry } from '../../shared/sentry.js';
+
+initBrowserSentry();
+
 // Socket.IO is loaded via CDN in index.html
 const socket = window.io();
 let pipelineData = null;
