@@ -109,6 +109,7 @@ describe('routes/health-probes-mount', () => {
     }
   });
 
+  // intent: ops.automation-smoke-healthy-when-armed
   test('GET /automation-smoke returns healthy message when enabled (self-heal verification arm)', async () => {
     const prevSmoke = process.env.AUTOMATION_SMOKE_ENABLED;
     const prevSentryDsn = process.env.SENTRY_DSN;
