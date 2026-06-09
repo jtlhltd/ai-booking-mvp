@@ -70,9 +70,9 @@ async function createMonitor(spec) {
   };
   if (spec.required_keyword) payload.required_keyword = spec.required_keyword;
   if (process.env.BETTERSTACK_TEAM_ID?.trim()) {
-    payload.team_id = Number(process.env.BETTERSTACK_TEAM_ID);
+    payload.team_name = process.env.BETTERSTACK_TEAM_ID.trim();
   }
-  return api('/monitors', { method: 'POST', body: JSON.stringify({ data: payload }) });
+  return api('/monitors', { method: 'POST', body: JSON.stringify(payload) });
 }
 
 const existing = await listMonitors();
