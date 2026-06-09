@@ -7,6 +7,7 @@ describe('operator-alerts', () => {
 
   beforeEach(async () => {
     jest.resetModules();
+    delete process.env.ALERT_WARNING_EMAIL;
     process.env.YOUR_EMAIL = 'ops@example.com';
     const mod = await import('../../../lib/operator-alerts.js');
     sendOperatorAlert = mod.sendOperatorAlert;
@@ -14,6 +15,7 @@ describe('operator-alerts', () => {
   });
 
   afterEach(() => {
+    delete process.env.ALERT_WARNING_EMAIL;
     delete process.env.YOUR_EMAIL;
   });
 
@@ -22,6 +24,7 @@ describe('operator-alerts', () => {
   });
 
   test('sendOperatorAlert returns no_your_email when unset', async () => {
+    delete process.env.ALERT_WARNING_EMAIL;
     delete process.env.YOUR_EMAIL;
     jest.resetModules();
     const { sendOperatorAlert: send } = await import('../../../lib/operator-alerts.js');
