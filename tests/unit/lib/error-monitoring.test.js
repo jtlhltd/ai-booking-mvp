@@ -10,6 +10,7 @@ beforeEach(() => {
 describe('lib/error-monitoring', () => {
   test('logError inserts row and returns success', async () => {
     jest.unstable_mockModule('../../../db.js', () => ({
+      dbType: 'test',
       query: jest.fn(async () => ({ rows: [{ id: 123 }] })),
     }));
     jest.unstable_mockModule('../../../lib/messaging-service.js', () => ({
@@ -23,6 +24,7 @@ describe('lib/error-monitoring', () => {
 
   test('getErrorStats returns error object when query throws', async () => {
     jest.unstable_mockModule('../../../db.js', () => ({
+      dbType: 'test',
       query: jest.fn(async () => {
         throw new Error('db_down');
       }),

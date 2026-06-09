@@ -34,3 +34,7 @@
 - Risk: returning `undefined` may omit the `message` field from JSON; tests should lock the intended response envelope.
 - Risk: enabled probe depends on `SENTRY_DSN`; tests should set and restore relevant env vars.
 - Rollback: revert the focused commit to restore the previous intentional throw if the self-heal probe needs to be re-triggered.
+
+## Amendments
+
+- During the required `npm run test:unit`, two unrelated tests failed because the cloud environment exposes alert configuration and one Jest mock was missing a current `db.js` export. Add test-only hardening so the required suite can run deterministically.
