@@ -50,6 +50,9 @@ do {
 $existing['CURSOR_SELF_HEAL_WEBHOOK_URL'] = $env:CURSOR_SELF_HEAL_WEBHOOK_URL
 $existing['CURSOR_SELF_HEAL_WEBHOOK_AUTH'] = ($env:CURSOR_SELF_HEAL_WEBHOOK_AUTH -replace '^Bearer\s+', '').Trim()
 $existing['SENTRY_SELF_HEAL_RELAY_SECRET'] = $env:SENTRY_SELF_HEAL_RELAY_SECRET
+if ($env:SENTRY_AUTH_TOKEN) { $existing['SENTRY_AUTH_TOKEN'] = $env:SENTRY_AUTH_TOKEN }
+if ($env:AUTOMATION_SMOKE_ENABLED) { $existing['AUTOMATION_SMOKE_ENABLED'] = $env:AUTOMATION_SMOKE_ENABLED }
+if ($env:SENTRY_SELF_HEAL_POLLER_ENABLED) { $existing['SENTRY_SELF_HEAL_POLLER_ENABLED'] = $env:SENTRY_SELF_HEAL_POLLER_ENABLED }
 
 $body = @($existing.GetEnumerator() | ForEach-Object { @{ key = $_.Key; value = $_.Value } })
 Invoke-RestMethod -Method PUT `
