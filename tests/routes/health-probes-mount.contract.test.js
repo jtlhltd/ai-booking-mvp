@@ -109,6 +109,7 @@ describe('routes/health-probes-mount', () => {
     }
   });
 
+  // intent: ops.automation-smoke-no-throw
   test('GET /automation-smoke returns ok when enabled with Sentry configured', async () => {
     const prevSmoke = process.env.AUTOMATION_SMOKE_ENABLED;
     const prevSentryDsn = process.env.SENTRY_DSN;
