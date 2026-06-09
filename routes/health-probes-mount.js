@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/node';
 import { handleHealthz } from '../lib/healthz.js';
 import { handleGcalPing } from '../lib/gcal-ping.js';
 import { buildPublicSentryConfig } from '../lib/sentry-config.js';
+import { automationSmokeProbeMessage } from '../lib/automation-smoke-probe.js';
 import { healTestProbeMessage } from '../lib/heal-test-probe.js';
 import { isSentryEnabled } from '../lib/sentry.js';
 
@@ -33,6 +34,21 @@ export function createHealthProbesRouter(deps) {
       return res.status(503).json({ ok: false, error: 'sentry_not_configured' });
     }
     next(new Error('Sentry debug test error'));
+  });
+
+  router.get('/automation-smoke', (req, res, next) => {
+    if (process.env.AUTOMATION_SMOKE_ENABLED !== 'true') {
+      return res.status(404).json({ ok: false, error: 'not_found' });
+    }
+    if (!isSentryEnabled()) {
+      return res.status(503).json({ ok: false, error: 'sentry_not_configured' });
+    }
+    try {
+      const message = automationSmokeProbeMessage();
+      return res.json({ ok: true, message });
+    } catch (err) {
+      return next(err);
+    }
   });
 
   router.get('/heal-test', (req, res, next) => {
