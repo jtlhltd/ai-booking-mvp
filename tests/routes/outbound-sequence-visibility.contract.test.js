@@ -442,8 +442,8 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
       if (s.includes('FROM leads')) {
         return {
           rows: [
-            { id: 11, phone: '+447700900111', phoneMatchKey: '7700900111', name: 'Acme Freight', service: 'LTL', source: 'import_csv', notes: 'Hot lead', leadStatus: 'new', createdAt: '2030-01-01T00:00:00.000Z' },
-            { id: 33, phone: '+447700900333', phoneMatchKey: '7700900333', name: 'Operator Stop Co', service: 'Parcel', source: 'manual', notes: '', leadStatus: 'follow_up', createdAt: '2030-01-01T00:00:00.000Z' },
+            { id: 11, phone: '+447700900111', phoneMatchKey: '7700900111', name: 'Acme Freight', service: 'LTL', source: 'import_csv', notes: 'Hot lead', leadStatus: 'new', createdAt: '2030-01-01T00:00:00.000Z', leadDialContextJson: '{"outboundSequenceOptIn":true}' },
+            { id: 33, phone: '+447700900333', phoneMatchKey: '7700900333', name: 'Operator Stop Co', service: 'Parcel', source: 'manual', notes: '', leadStatus: 'follow_up', createdAt: '2030-01-01T00:00:00.000Z', leadDialContextJson: '{"outboundSequenceOptIn":true}' },
             { id: 22, phone: '+447700900222', phoneMatchKey: '7700900222', name: 'Done Logistics', service: 'Pallet', source: 'zapier', notes: '', leadStatus: 'contacted', createdAt: '2030-01-01T00:00:00.000Z' },
           ],
         };
@@ -538,7 +538,7 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
       if (s.includes('FROM leads')) {
         return {
           rows: [
-            { id: 33, phone: '+447700900333', phoneMatchKey: '7700900333', name: 'Operator Stop Co', service: 'Parcel', source: 'manual', notes: '', leadStatus: 'follow_up', createdAt: '2030-01-01T00:00:00.000Z' },
+            { id: 33, phone: '+447700900333', phoneMatchKey: '7700900333', name: 'Operator Stop Co', service: 'Parcel', source: 'manual', notes: '', leadStatus: 'follow_up', createdAt: '2030-01-01T00:00:00.000Z', leadDialContextJson: '{"outboundSequenceOptIn":true}' },
           ],
         };
       }

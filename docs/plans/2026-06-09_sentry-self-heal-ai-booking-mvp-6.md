@@ -38,3 +38,4 @@
 ## Amendments
 
 - During the required `npm run test:unit`, two unrelated tests failed because the cloud environment exposes alert configuration and one Jest mock was missing a current `db.js` export. Add test-only hardening so the required suite can run deterministically.
+- During the required `npm run test:integration-lite`, two outbound-sequence visibility fixtures lacked the opt-in JSON now required for terminal rows to appear in the sequence-state list. Add fixture opt-in data only; do not change runtime filtering.
