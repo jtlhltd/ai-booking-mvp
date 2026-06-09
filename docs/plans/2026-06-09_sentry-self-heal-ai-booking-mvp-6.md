@@ -3,7 +3,7 @@
 ## Context
 
 - Sentry automation trigger contained placeholder issue metadata, but the routed `ai-booking-mvp` project has actionable issue `AI-BOOKING-MVP-6`.
-- Sentry reports 6 live error events for `GET /heal-test`, all failing in `lib/heal-test-probe.js` with `TypeError: Cannot read properties of null (reading 'message')`.
+- Sentry reports 15 live error events for `GET /heal-test`, all failing in `lib/heal-test-probe.js` with `TypeError: Cannot read properties of null (reading 'message')`.
 - The route is a gated self-heal test probe (`HEAL_TEST_ENABLED=true`) and not a dial, queue, tenant, billing, auth, migration, or scheduling surface.
 - Seer analysis was attempted, but the Sentry API returned a communication error event; local stack frames match the repository code.
 
