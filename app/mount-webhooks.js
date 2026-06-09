@@ -12,6 +12,7 @@ const webhookBypassPrefixes = [
   '/webhooks/twilio/sms-inbound',
   '/webhooks/twilio-voice',
   '/webhooks/vapi',
+  '/webhooks/sentry-self-heal',
 ];
  
 const webhookBypassExact = new Set([

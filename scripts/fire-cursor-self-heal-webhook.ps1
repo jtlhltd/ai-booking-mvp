@@ -11,7 +11,7 @@ param(
 )
 
 $url = $env:CURSOR_SELF_HEAL_WEBHOOK_URL
-$auth = $env:CURSOR_SELF_HEAL_WEBHOOK_AUTH
+$auth = ($env:CURSOR_SELF_HEAL_WEBHOOK_AUTH -replace '^Bearer\s+', '').Trim()
 
 if (-not $url -or -not $auth) {
   Write-Error "Set CURSOR_SELF_HEAL_WEBHOOK_URL and CURSOR_SELF_HEAL_WEBHOOK_AUTH from the automation Webhook settings."
