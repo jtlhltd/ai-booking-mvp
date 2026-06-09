@@ -10,3 +10,10 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 18
+      # Set once via Dashboard or scripts/sync-self-heal-env-to-render.ps1 (sync: false keeps values across deploys)
+      - key: CURSOR_SELF_HEAL_WEBHOOK_URL
+        sync: false
+      - key: CURSOR_SELF_HEAL_WEBHOOK_AUTH
+        sync: false
+      - key: SENTRY_SELF_HEAL_RELAY_SECRET
+        sync: false

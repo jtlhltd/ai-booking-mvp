@@ -2,6 +2,7 @@ node_modules
 .env
 .env.test
 .cursor/cloud-agent-secrets.env
+.cursor/self-heal-secrets.env
 coverage
 coverage-tmp/
 data/*.log

@@ -9,8 +9,14 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/load-self-heal-secrets.ps1"
+
 $relayUrl = "$RelayBaseUrl/webhooks/sentry-self-heal"
-$relaySecret = [guid]::NewGuid().ToString("N")
+$relaySecret = $env:SENTRY_SELF_HEAL_RELAY_SECRET
+if (-not $relaySecret) {
+  $relaySecret = [guid]::NewGuid().ToString("N")
+  Write-Warning "SENTRY_SELF_HEAL_RELAY_SECRET not in .cursor/self-heal-secrets.env — generated ephemeral: $relaySecret"
+}
 
 Write-Host "Sentry to Cursor self-heal setup"
 Write-Host "Relay URL: $relayUrl"
@@ -29,9 +35,13 @@ if (-not $env:SENTRY_AUTH_TOKEN) {
 }
 
 Write-Host ""
-Write-Host "=== Render env vars (Dashboard -> ai-booking-mvp -> Environment) ==="
-Write-Host "CURSOR_SELF_HEAL_WEBHOOK_URL = from automation Settings -> Webhook"
-Write-Host "CURSOR_SELF_HEAL_WEBHOOK_AUTH = Generate auth header (crsr_... only, not API key)"
+Write-Host "=== Local secrets (gitignored) ==="
+Write-Host "Stored in .cursor/self-heal-secrets.env — scripts load automatically."
+Write-Host "Sync once to Render: .\scripts\sync-self-heal-env-to-render.ps1"
+Write-Host ""
+Write-Host "=== Render env vars (after sync, no manual re-entry) ==="
+Write-Host "CURSOR_SELF_HEAL_WEBHOOK_URL = (from self-heal-secrets.env)"
+Write-Host "CURSOR_SELF_HEAL_WEBHOOK_AUTH = (from self-heal-secrets.env)"
 Write-Host "SENTRY_SELF_HEAL_RELAY_SECRET = $relaySecret"
 Write-Host ""
 

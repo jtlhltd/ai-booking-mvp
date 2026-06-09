@@ -1,7 +1,5 @@
 # Fire the Cursor self-heal automation webhook (backup when native Sentry trigger has 0 runs).
-# Set after saving the automation in cursor.com/automations → Settings → Webhook:
-#   $env:CURSOR_SELF_HEAL_WEBHOOK_URL = "https://api2.cursor.sh/automations/webhook/..."
-#   $env:CURSOR_SELF_HEAL_WEBHOOK_AUTH = "crsr_..."  # Copy auth header from automation UI
+# Secrets: .cursor/self-heal-secrets.env (gitignored) — loaded automatically if env vars unset.
 
 param(
   [Parameter(Mandatory = $true)]
@@ -9,6 +7,8 @@ param(
   [string]$Project = "ai-booking-mvp",
   [string]$Organization = "jtlh-ltd"
 )
+
+. "$PSScriptRoot/load-self-heal-secrets.ps1"
 
 $url = $env:CURSOR_SELF_HEAL_WEBHOOK_URL
 $auth = ($env:CURSOR_SELF_HEAL_WEBHOOK_AUTH -replace '^Bearer\s+', '').Trim()
