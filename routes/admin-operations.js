@@ -224,5 +224,17 @@ export function createAdminOperationsRouter({ io }) {
     }
   });
 
+  router.get('/incidents', async (req, res) => {
+    try {
+      const { listOpenIncidents } = await import('../lib/incidents.js');
+      const limit = Math.min(200, parseInt(String(req.query.limit || '50'), 10) || 50);
+      const incidents = await listOpenIncidents(limit);
+      res.json({ ok: true, incidents });
+    } catch (error) {
+      console.error('Error listing incidents:', error);
+      res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
   return router;
 }

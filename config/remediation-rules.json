@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "rules": {
+    "vapi_call_failure": {
+      "network": {
+        "actions": ["schedule_retry"],
+        "retryDelayMinutes": 30,
+        "maxRetries": 3
+      },
+      "server_error": {
+        "actions": ["sms_fallback", "schedule_retry"],
+        "retryDelayMinutes": 15,
+        "maxRetries": 3
+      },
+      "rate_limit": {
+        "actions": ["schedule_retry"],
+        "retryDelayMinutes": 60,
+        "maxRetries": 3
+      },
+      "client_error": {
+        "actions": ["update_lead_status"],
+        "maxRetries": 0
+      },
+      "critical": {
+        "actions": ["update_lead_status"],
+        "retryDelayMinutes": 120,
+        "maxRetries": 1
+      },
+      "vapi_error": {
+        "actions": ["sms_fallback", "schedule_retry"],
+        "retryDelayMinutes": 30,
+        "maxRetries": 3
+      },
+      "unknown": {
+        "actions": ["schedule_retry"],
+        "retryDelayMinutes": 30,
+        "maxRetries": 3
+      }
+    },
+    "stale_processing": {
+      "*": {
+        "actions": ["reset_stale_processing"]
+      }
+    },
+    "webhook_processing_failed": {
+      "network": {
+        "actions": ["enqueue_webhook_retry"],
+        "maxRetries": 5
+      },
+      "server_error": {
+        "actions": ["enqueue_webhook_retry"],
+        "maxRetries": 5
+      },
+      "*": {
+        "actions": ["enqueue_webhook_retry"],
+        "maxRetries": 5
+      }
+    }
+  }
+}

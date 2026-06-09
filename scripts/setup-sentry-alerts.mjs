@@ -1,17 +1,24 @@
 /**
- * Create Sentry workflow alerts for both production apps.
+ * Create Sentry workflow alerts with severity-tiered routing.
  *
  * Usage:
  *   SENTRY_AUTH_TOKEN=sntryu_... node scripts/setup-sentry-alerts.mjs
  *
- * Token needs alerts:write (or org:write) on jtlh-ltd.
+ * Optional env:
+ *   SENTRY_NOTIFY_USER_ID_CRITICAL  (default: SENTRY_NOTIFY_USER_ID or 4654133)
+ *   SENTRY_NOTIFY_USER_ID_WARNING   (defaults to critical user)
  */
 import 'dotenv/config';
 
 const ORG = 'jtlh-ltd';
 const REGION = 'https://de.sentry.io';
-const NOTIFY_USER_ID = '4654133';
+const DEFAULT_USER = '4654133';
 const token = process.env.SENTRY_AUTH_TOKEN?.trim();
+const criticalUser =
+  process.env.SENTRY_NOTIFY_USER_ID_CRITICAL?.trim()
+  || process.env.SENTRY_NOTIFY_USER_ID?.trim()
+  || DEFAULT_USER;
+const warningUser = process.env.SENTRY_NOTIFY_USER_ID_WARNING?.trim() || criticalUser;
 
 if (!token) {
   console.error('Missing SENTRY_AUTH_TOKEN (org auth token with alerts:write).');
@@ -20,40 +27,84 @@ if (!token) {
 
 const workflows = [
   {
-    name: 'AI Booking — new production error',
+    name: 'AI Booking — critical production error',
     appTag: 'ai-booking-mvp',
+    level: 50,
+    userId: criticalUser,
+    trigger: 'first_seen_event',
+    frequency: 15,
   },
   {
-    name: 'Terry Spec Converter — new production error',
+    name: 'Terry Spec Converter — critical production error',
     appTag: 'terry-spec-converter',
+    level: 50,
+    userId: criticalUser,
+    trigger: 'first_seen_event',
+    frequency: 15,
   },
   {
     name: 'AI Booking — error spike (10/hr)',
     appTag: 'ai-booking-mvp',
+    level: 40,
+    userId: criticalUser,
     spike: true,
+    frequency: 60,
   },
   {
     name: 'Terry Spec Converter — error spike (10/hr)',
     appTag: 'terry-spec-converter',
+    level: 40,
+    userId: criticalUser,
     spike: true,
+    frequency: 60,
+  },
+  {
+    name: 'AI Booking — warning digest (issue regression)',
+    appTag: 'ai-booking-mvp',
+    level: 30,
+    userId: warningUser,
+    trigger: 'regression_event',
+    frequency: 120,
+  },
+  {
+    name: 'Terry Spec Converter — warning digest (issue regression)',
+    appTag: 'terry-spec-converter',
+    level: 30,
+    userId: warningUser,
+    trigger: 'regression_event',
+    frequency: 120,
   },
 ];
 
-function buildWorkflow({ name, appTag, spike = false }) {
+function emailAction(userId) {
+  return {
+    type: 'email',
+    integrationId: null,
+    data: {},
+    config: {
+      targetType: 'user',
+      targetIdentifier: userId,
+      targetDisplay: null,
+    },
+    status: 'active',
+  };
+}
+
+function buildWorkflow(spec) {
   const conditions = [
     {
       type: 'tagged_event',
-      comparison: { key: 'app', match: 'eq', value: appTag },
+      comparison: { key: 'app', match: 'eq', value: spec.appTag },
       conditionResult: true,
     },
     {
       type: 'level',
-      comparison: { level: 40, match: 'gte' },
+      comparison: { level: spec.level, match: 'gte' },
       conditionResult: true,
     },
   ];
 
-  if (spike) {
+  if (spec.spike) {
     conditions.push({
       type: 'event_frequency_count',
       comparison: { value: 10, interval: '1hr' },
@@ -61,37 +112,25 @@ function buildWorkflow({ name, appTag, spike = false }) {
     });
   }
 
+  const triggerType = spec.spike
+    ? { type: 'event_frequency_count', comparison: { value: 10, interval: '1hr' }, conditionResult: true }
+    : { type: spec.trigger || 'first_seen_event', comparison: true, conditionResult: true };
+
   return {
-    name,
+    name: spec.name,
     enabled: true,
     environment: 'production',
-    config: { frequency: spike ? 60 : 30 },
+    config: { frequency: spec.frequency || 30 },
     triggers: {
       logicType: 'any-short',
-      conditions: [
-        spike
-          ? { type: 'event_frequency_count', comparison: { value: 10, interval: '1hr' }, conditionResult: true }
-          : { type: 'first_seen_event', comparison: true, conditionResult: true },
-      ],
+      conditions: [triggerType],
       actions: [],
     },
     actionFilters: [
       {
         logicType: 'all',
         conditions,
-        actions: [
-          {
-            type: 'email',
-            integrationId: null,
-            data: {},
-            config: {
-              targetType: 'user',
-              targetIdentifier: NOTIFY_USER_ID,
-              targetDisplay: null,
-            },
-            status: 'active',
-          },
-        ],
+        actions: [emailAction(spec.userId)],
       },
     ],
   };
@@ -134,3 +173,5 @@ for (const spec of workflows) {
   const created = await createWorkflow(buildWorkflow(spec));
   console.log(`created: ${spec.name} → https://${ORG}.sentry.io/monitors/alerts/${created.id}/`);
 }
+
+console.log('\nNote: legacy workflows named "— new production error" can be disabled in Sentry UI if redundant.');
