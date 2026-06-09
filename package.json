@@ -37,7 +37,8 @@
     "postrelease": "git push --follow-tags origin main",
     "setup:sentry-alerts": "node scripts/setup-sentry-alerts.mjs",
     "setup:betterstack-monitors": "node scripts/setup-betterstack-monitors.mjs",
-    "setup:observability": "node scripts/setup-sentry-alerts.mjs && node scripts/setup-betterstack-monitors.mjs"
+    "setup:observability": "node scripts/setup-sentry-alerts.mjs && node scripts/setup-betterstack-monitors.mjs",
+    "cleanup:observability": "node scripts/cleanup-observability.mjs"
   },
   "dependencies": {
     "@sentry/browser": "^10.56.0",
