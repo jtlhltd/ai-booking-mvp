@@ -46,3 +46,10 @@ public/build/
 !.cursor/rules/
 !.cursor/rules/*.mdc
 
+# Playwright / local test output
+playwright-report/
+test-results/
+
+# One-off agent / local scratch files
+tmp-*.txt
+
