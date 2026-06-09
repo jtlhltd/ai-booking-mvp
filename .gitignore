@@ -47,6 +47,7 @@ public/build/
 .cursor/*
 !.cursor/rules/
 !.cursor/rules/*.mdc
+!.cursor/self-heal-secrets.env.example
 
 # Playwright / local test output
 playwright-report/
