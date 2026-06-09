@@ -107,13 +107,13 @@ function buildWorkflow(spec) {
   if (spec.spike) {
     conditions.push({
       type: 'event_frequency_count',
-      comparison: { value: 10, interval: '1hr' },
+      comparison: { value: 10, interval: '1h' },
       conditionResult: true,
     });
   }
 
   const triggerType = spec.spike
-    ? { type: 'event_frequency_count', comparison: { value: 10, interval: '1hr' }, conditionResult: true }
+    ? { type: 'event_frequency_count', comparison: { value: 10, interval: '1h' }, conditionResult: true }
     : { type: spec.trigger || 'first_seen_event', comparison: true, conditionResult: true };
 
   return {
