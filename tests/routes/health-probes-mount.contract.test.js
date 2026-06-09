@@ -109,14 +109,18 @@ describe('routes/health-probes-mount', () => {
     }
   });
 
-  test('GET /automation-smoke returns 500 when enabled with broken probe (self-heal test arm)', async () => {
+  test('GET /automation-smoke returns healthy message when enabled (self-heal verification arm)', async () => {
     const prevSmoke = process.env.AUTOMATION_SMOKE_ENABLED;
     const prevSentryDsn = process.env.SENTRY_DSN;
     process.env.AUTOMATION_SMOKE_ENABLED = 'true';
     process.env.SENTRY_DSN = 'https://public@example.com/1';
     try {
       const res = await request(buildApp()).get('/automation-smoke');
-      expect(res.status).toBe(500);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        ok: true,
+        message: 'automation smoke probe healthy'
+      });
     } finally {
       if (prevSmoke === undefined) delete process.env.AUTOMATION_SMOKE_ENABLED;
       else process.env.AUTOMATION_SMOKE_ENABLED = prevSmoke;
