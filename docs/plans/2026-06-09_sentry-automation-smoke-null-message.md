@@ -13,7 +13,7 @@
 - The route contract test covers the armed success behavior.
 - `docs/INTENT.md` documents the operational behavior and names the enforcing test.
 - Required local checks pass: `npm run test:unit`, `npm run test:integration-lite`, and `npm run test:ci`.
-- Changes are committed, pushed to `cursor/sentry-self-heal-loop-c47d`, opened as a PR, and shipped only if eligible.
+- Changes are committed, pushed to `cursor/full-self-heal-loop-d812`, opened as a PR, and shipped only if eligible.
 - Deployed verification includes health checks, culprit path 2xx, and a Sentry quiet-period check before reporting completion.
 
 ## Non-goals
@@ -38,3 +38,7 @@
 - Risk: Changing an intentionally broken smoke arm could reduce a test-only failure signal. Mitigation: `/heal-test` remains available for armed self-heal failure testing.
 - Risk: The deployed env may not have `AUTOMATION_SMOKE_ENABLED=true`, in which case live culprit-path verification should expect `404 not_found` rather than 2xx. Mitigation: verify the current deployed behavior and report the actual state.
 - Rollback: Revert the commit to restore the previous throwing probe and test expectation.
+
+## Amendments
+
+- 2026-06-09: Updated the target branch from the earlier self-heal branch name to this automation run's branch, `cursor/full-self-heal-loop-d812`.
