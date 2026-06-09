@@ -1,9 +1,15 @@
-import { describe, test, expect } from '@jest/globals';
+import { describe, test, expect, beforeEach } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 import { createHealthProbesRouter } from '../../routes/health-probes-mount.js';
+import { resetAutomationSmokeProbe } from '../../lib/automation-smoke-probe.js';
 
 describe('routes/health-probes-mount', () => {
+  beforeEach(() => {
+    // Reset smoke probe state before each test
+    resetAutomationSmokeProbe();
+  });
+
   function buildApp() {
     const app = express();
     app.use(
@@ -117,6 +123,38 @@ describe('routes/health-probes-mount', () => {
     try {
       const res = await request(buildApp()).get('/automation-smoke');
       expect(res.status).toBe(500);
+    } finally {
+      if (prevSmoke === undefined) delete process.env.AUTOMATION_SMOKE_ENABLED;
+      else process.env.AUTOMATION_SMOKE_ENABLED = prevSmoke;
+      if (prevSentryDsn === undefined) delete process.env.SENTRY_DSN;
+      else process.env.SENTRY_DSN = prevSentryDsn;
+    }
+  });
+
+  test('GET /automation-smoke fires only once (subsequent calls return cached result)', async () => {
+    const prevSmoke = process.env.AUTOMATION_SMOKE_ENABLED;
+    const prevSentryDsn = process.env.SENTRY_DSN;
+    process.env.AUTOMATION_SMOKE_ENABLED = 'true';
+    process.env.SENTRY_DSN = 'https://public@example.com/1';
+    try {
+      const app = buildApp();
+      
+      // First call: should throw and return 500
+      const res1 = await request(app).get('/automation-smoke');
+      expect(res1.status).toBe(500);
+      
+      // Second call: should return cached result with 200
+      const res2 = await request(app).get('/automation-smoke');
+      expect(res2.status).toBe(200);
+      expect(res2.body.ok).toBe(true);
+      expect(res2.body.message).toMatch(/smoke probe already fired/);
+      expect(res2.body.message).toMatch(/cached error/);
+      
+      // Third call: should still return cached result
+      const res3 = await request(app).get('/automation-smoke');
+      expect(res3.status).toBe(200);
+      expect(res3.body.ok).toBe(true);
+      expect(res3.body.message).toMatch(/smoke probe already fired/);
     } finally {
       if (prevSmoke === undefined) delete process.env.AUTOMATION_SMOKE_ENABLED;
       else process.env.AUTOMATION_SMOKE_ENABLED = prevSmoke;
