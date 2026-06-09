@@ -80,6 +80,23 @@ describe('routes/health-probes-mount', () => {
     }
   });
 
+  test('GET /heal-test succeeds when enabled and Sentry is configured', async () => {
+    const prevHealTest = process.env.HEAL_TEST_ENABLED;
+    const prevSentryDsn = process.env.SENTRY_DSN;
+    process.env.HEAL_TEST_ENABLED = 'true';
+    process.env.SENTRY_DSN = 'https://public@example.com/1';
+    try {
+      const res = await request(buildApp()).get('/heal-test');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true });
+    } finally {
+      if (prevHealTest === undefined) delete process.env.HEAL_TEST_ENABLED;
+      else process.env.HEAL_TEST_ENABLED = prevHealTest;
+      if (prevSentryDsn === undefined) delete process.env.SENTRY_DSN;
+      else process.env.SENTRY_DSN = prevSentryDsn;
+    }
+  });
+
   test('GET /debug-sentry-trace returns 404 unless DEBUG_SENTRY=true', async () => {
     const prev = process.env.DEBUG_SENTRY;
     delete process.env.DEBUG_SENTRY;
