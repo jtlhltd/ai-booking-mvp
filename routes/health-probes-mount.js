@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/node';
 import { handleHealthz } from '../lib/healthz.js';
 import { handleGcalPing } from '../lib/gcal-ping.js';
 import { buildPublicSentryConfig } from '../lib/sentry-config.js';
+import { healTestProbeMessage } from '../lib/heal-test-probe.js';
 import { isSentryEnabled } from '../lib/sentry.js';
 
 /**
@@ -32,6 +33,21 @@ export function createHealthProbesRouter(deps) {
       return res.status(503).json({ ok: false, error: 'sentry_not_configured' });
     }
     next(new Error('Sentry debug test error'));
+  });
+
+  router.get('/heal-test', (req, res, next) => {
+    if (process.env.HEAL_TEST_ENABLED !== 'true') {
+      return res.status(404).json({ ok: false, error: 'not_found' });
+    }
+    if (!isSentryEnabled()) {
+      return res.status(503).json({ ok: false, error: 'sentry_not_configured' });
+    }
+    try {
+      const message = healTestProbeMessage();
+      return res.json({ ok: true, message });
+    } catch (err) {
+      return next(err);
+    }
   });
 
   router.get('/debug-sentry-trace', async (req, res) => {

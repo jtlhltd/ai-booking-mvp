@@ -67,6 +67,19 @@ describe('routes/health-probes-mount', () => {
     }
   });
 
+  test('GET /heal-test returns 404 unless HEAL_TEST_ENABLED=true', async () => {
+    const prev = process.env.HEAL_TEST_ENABLED;
+    delete process.env.HEAL_TEST_ENABLED;
+    try {
+      const res = await request(buildApp()).get('/heal-test');
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('not_found');
+    } finally {
+      if (prev === undefined) delete process.env.HEAL_TEST_ENABLED;
+      else process.env.HEAL_TEST_ENABLED = prev;
+    }
+  });
+
   test('GET /debug-sentry-trace returns 404 unless DEBUG_SENTRY=true', async () => {
     const prev = process.env.DEBUG_SENTRY;
     delete process.env.DEBUG_SENTRY;

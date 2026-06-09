@@ -1,6 +1,7 @@
 node_modules
 .env
 .env.test
+.cursor/cloud-agent-secrets.env
 coverage
 coverage-tmp/
 data/*.log
