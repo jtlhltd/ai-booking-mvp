@@ -52,13 +52,5 @@ Write-Host "- After PR: gh pr ready then merge for GREEN tier"
 Write-Host "- Never stop at draft PR; verify prod before Sentry resolve"
 Write-Host ""
 
-<<<<<<< Updated upstream
-Write-Host "=== Quick relay test (after Render env + deploy) ==="
-Write-Host @"
-`$body = @{ data = @{ issue = @{ id = 'AI-BOOKING-MVP-7'; project = @{ slug = '$Project' } } } } | ConvertTo-Json -Depth 5
-Invoke-WebRequest -Uri '$relayUrl' -Method POST -Headers @{ 'x-sentry-self-heal-secret' = '$relaySecret'; 'Content-Type' = 'application/json' } -Body `$body -UseBasicParsing
-"@
-=======
 Write-Host "=== Quick test after deploy ==="
 Write-Host "  .\scripts\fire-cursor-self-heal-webhook.ps1 -IssueId AI-BOOKING-MVP-7"
->>>>>>> Stashed changes
