@@ -28,7 +28,8 @@ export function createSentryCursorRelayRouter() {
       const result = await forwardToCursorSelfHealWebhook(req.body);
       return res.status(200).json({
         ok: true,
-        forwarded: true,
+        forwarded: !result.deduped,
+        deduped: result.deduped === true,
         cursor: result.body,
         issue: result.payload.issue
       });

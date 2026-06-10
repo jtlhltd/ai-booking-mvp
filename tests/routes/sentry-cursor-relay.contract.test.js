@@ -2,6 +2,7 @@ import request from 'supertest';
 import express from 'express';
 import { jest } from '@jest/globals';
 import { createSentryCursorRelayRouter } from '../../routes/sentry-cursor-relay-mount.js';
+import { resetSelfHealTriggerDedupeForTests } from '../../lib/sentry-self-heal-trigger-dedupe.js';
 
 describe('routes/sentry-cursor-relay-mount', () => {
   const originalFetch = global.fetch;
@@ -10,8 +11,15 @@ describe('routes/sentry-cursor-relay-mount', () => {
   const originalAuth = process.env.CURSOR_SELF_HEAL_WEBHOOK_AUTH;
   const originalResolveToken = process.env.SENTRY_RESOLVE_AUTH_TOKEN;
 
+  beforeEach(() => {
+    resetSelfHealTriggerDedupeForTests();
+    delete process.env.SENTRY_SELF_HEAL_TRIGGER_COOLDOWN_MS;
+    delete process.env.SENTRY_SELF_HEAL_RELAY_SECRET;
+  });
+
   afterEach(() => {
     global.fetch = originalFetch;
+    resetSelfHealTriggerDedupeForTests();
     if (originalSecret === undefined) delete process.env.SENTRY_SELF_HEAL_RELAY_SECRET;
     else process.env.SENTRY_SELF_HEAL_RELAY_SECRET = originalSecret;
     if (originalUrl === undefined) delete process.env.CURSOR_SELF_HEAL_WEBHOOK_URL;

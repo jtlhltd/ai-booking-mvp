@@ -1,4 +1,5 @@
-# Fire the Cursor self-heal automation webhook (backup when native Sentry trigger has 0 runs).
+# Fire the Cursor self-heal automation webhook (manual backup — bypasses relay dedupe).
+# Prefer POST /webhooks/sentry-self-heal on prod for normal tests (respects cooldown).
 # Secrets: .cursor/self-heal-secrets.env (gitignored) — loaded automatically if env vars unset.
 
 param(
