@@ -4,7 +4,7 @@ import {
   extractSentryIssueContext,
   forwardToCursorSelfHealWebhook
 } from '../../../lib/sentry-cursor-relay.js';
-import { resetSelfHealTriggerDedupeForTests } from '../../../lib/sentry-self-heal-trigger-dedupe.js';
+import { resetAutomationTriggerDedupeForTests } from '../../../lib/automation-trigger-dedupe.js';
 
 describe('lib/sentry-cursor-relay', () => {
   const originalFetch = global.fetch;
@@ -12,7 +12,7 @@ describe('lib/sentry-cursor-relay', () => {
   const originalAuth = process.env.CURSOR_SELF_HEAL_WEBHOOK_AUTH;
 
   beforeEach(() => {
-    resetSelfHealTriggerDedupeForTests();
+    resetAutomationTriggerDedupeForTests();
     process.env.CURSOR_SELF_HEAL_WEBHOOK_URL = 'https://api2.cursor.sh/automations/webhook/test';
     process.env.CURSOR_SELF_HEAL_WEBHOOK_AUTH = 'crsr_testtoken';
     process.env.SENTRY_SELF_HEAL_TRIGGER_COOLDOWN_MS = '60000';
@@ -25,7 +25,7 @@ describe('lib/sentry-cursor-relay', () => {
     if (originalAuth === undefined) delete process.env.CURSOR_SELF_HEAL_WEBHOOK_AUTH;
     else process.env.CURSOR_SELF_HEAL_WEBHOOK_AUTH = originalAuth;
     delete process.env.SENTRY_SELF_HEAL_TRIGGER_COOLDOWN_MS;
-    resetSelfHealTriggerDedupeForTests();
+    resetAutomationTriggerDedupeForTests();
   });
   test('extractSentryIssueContext reads nested Sentry alert payload', () => {
     expect(
@@ -55,6 +55,8 @@ describe('lib/sentry-cursor-relay', () => {
       })
     ).toEqual({
       source: 'sentry-self-heal-relay',
+      automation: 'sentry-self-heal',
+      dedupeId: 'AI-BOOKING-MVP-6',
       organization: 'jtlh-ltd',
       project: 'ai-booking-mvp',
       issue: {

@@ -53,9 +53,19 @@ $existing['CURSOR_SELF_HEAL_WEBHOOK_AUTH'] = ($env:CURSOR_SELF_HEAL_WEBHOOK_AUTH
 $existing['SENTRY_SELF_HEAL_RELAY_SECRET'] = $env:SENTRY_SELF_HEAL_RELAY_SECRET
 $existing['SENTRY_AUTH_TOKEN'] = $env:SENTRY_AUTH_TOKEN
 $existing.Remove('SENTRY_RESOLVE_AUTH_TOKEN') | Out-Null
-foreach ($toggleKey in @('AUTOMATION_SMOKE_ENABLED', 'SENTRY_SELF_HEAL_POLLER_ENABLED', 'HEAL_TEST_ENABLED')) {
+foreach ($toggleKey in @('AUTOMATION_SMOKE_ENABLED', 'SENTRY_SELF_HEAL_POLLER_ENABLED', 'HEAL_TEST_ENABLED', 'RENDER_DEPLOY_FAIL_POLLER_ENABLED')) {
   if (Test-Path "env:$toggleKey") {
     $existing[$toggleKey] = (Get-Item "env:$toggleKey").Value
+  }
+}
+foreach ($optionalKey in @(
+  'CURSOR_CI_FAIL_WEBHOOK_URL', 'CURSOR_CI_FAIL_WEBHOOK_AUTH',
+  'CURSOR_DEPENDABOT_WEBHOOK_URL', 'CURSOR_DEPENDABOT_WEBHOOK_AUTH',
+  'CURSOR_DEPLOY_FAIL_WEBHOOK_URL', 'CURSOR_DEPLOY_FAIL_WEBHOOK_AUTH',
+  'RENDER_API_KEY', 'RENDER_SERVICE_ID'
+)) {
+  if (Test-Path "env:$optionalKey") {
+    $existing[$optionalKey] = (Get-Item "env:$optionalKey").Value
   }
 }
 

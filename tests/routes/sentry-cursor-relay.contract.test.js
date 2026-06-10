@@ -1,10 +1,10 @@
 import request from 'supertest';
 import express from 'express';
 import { jest } from '@jest/globals';
-import { createSentryCursorRelayRouter } from '../../routes/sentry-cursor-relay-mount.js';
-import { resetSelfHealTriggerDedupeForTests } from '../../lib/sentry-self-heal-trigger-dedupe.js';
+import { createCursorAutomationRelayRouter } from '../../routes/cursor-automation-relay-mount.js';
+import { resetAutomationTriggerDedupeForTests } from '../../lib/automation-trigger-dedupe.js';
 
-describe('routes/sentry-cursor-relay-mount', () => {
+describe('routes/cursor-automation-relay-mount', () => {
   const originalFetch = global.fetch;
   const originalSecret = process.env.SENTRY_SELF_HEAL_RELAY_SECRET;
   const originalUrl = process.env.CURSOR_SELF_HEAL_WEBHOOK_URL;
@@ -12,14 +12,15 @@ describe('routes/sentry-cursor-relay-mount', () => {
   const originalResolveToken = process.env.SENTRY_RESOLVE_AUTH_TOKEN;
 
   beforeEach(() => {
-    resetSelfHealTriggerDedupeForTests();
+    resetAutomationTriggerDedupeForTests();
     delete process.env.SENTRY_SELF_HEAL_TRIGGER_COOLDOWN_MS;
     delete process.env.SENTRY_SELF_HEAL_RELAY_SECRET;
+    delete process.env.CURSOR_AUTOMATION_RELAY_SECRET;
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
-    resetSelfHealTriggerDedupeForTests();
+    resetAutomationTriggerDedupeForTests();
     if (originalSecret === undefined) delete process.env.SENTRY_SELF_HEAL_RELAY_SECRET;
     else process.env.SENTRY_SELF_HEAL_RELAY_SECRET = originalSecret;
     if (originalUrl === undefined) delete process.env.CURSOR_SELF_HEAL_WEBHOOK_URL;
@@ -32,7 +33,7 @@ describe('routes/sentry-cursor-relay-mount', () => {
 
   function buildApp() {
     const app = express();
-    app.use(createSentryCursorRelayRouter());
+    app.use(createCursorAutomationRelayRouter());
     return app;
   }
 
@@ -87,5 +88,29 @@ describe('routes/sentry-cursor-relay-mount', () => {
     expect(res.status).toBe(200);
     expect(res.body.resolved).toBe(true);
     expect(res.body.issueId).toBe('AI-BOOKING-MVP-7');
+  });
+
+  test('POST /webhooks/automation/github forwards ci-failed payload', async () => {
+    process.env.CURSOR_CI_FAIL_WEBHOOK_URL = 'https://api2.cursor.sh/automations/webhook/ci';
+    process.env.CURSOR_CI_FAIL_WEBHOOK_AUTH = 'crsr_ci';
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ success: true })
+    }));
+
+    const res = await request(buildApp())
+      .post('/webhooks/automation/github')
+      .send({
+        type: 'ci-failed',
+        runId: '999',
+        runUrl: 'https://github.com/jtlhltd/ai-booking-mvp/actions/runs/999',
+        repository: 'jtlhltd/ai-booking-mvp',
+        branch: 'main'
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.automation).toBe('ci-failed');
   });
 });

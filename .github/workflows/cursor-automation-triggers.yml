@@ -1,0 +1,64 @@
+name: Cursor automation triggers
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  notify-cursor:
+    if: >-
+      (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'failure' &&
+        github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'pull_request' &&
+        github.event.pull_request.user.login == 'dependabot[bot]' &&
+        github.event.action == 'opened')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Cursor — CI failed on main
+        if: github.event_name == 'workflow_run'
+        env:
+          RELAY_URL: ${{ secrets.CURSOR_AUTOMATION_RELAY_URL }}
+          RELAY_SECRET: ${{ secrets.CURSOR_AUTOMATION_RELAY_SECRET }}
+        run: |
+          if [ -z "$RELAY_URL" ] || [ -z "$RELAY_SECRET" ]; then
+            echo "CURSOR_AUTOMATION_RELAY_URL or CURSOR_AUTOMATION_RELAY_SECRET not set — skipping."
+            exit 0
+          fi
+          curl -fsS -X POST "$RELAY_URL/webhooks/automation/github" \
+            -H "Content-Type: application/json" \
+            -H "x-cursor-automation-relay-secret: $RELAY_SECRET" \
+            -d "$(jq -n \
+              --arg type "ci-failed" \
+              --arg runId "${{ github.event.workflow_run.id }}" \
+              --arg runUrl "${{ github.event.workflow_run.html_url }}" \
+              --arg commit "${{ github.event.workflow_run.head_sha }}" \
+              --arg branch "${{ github.event.workflow_run.head_branch }}" \
+              --arg workflow "${{ github.event.workflow_run.name }}" \
+              --arg repository "${{ github.repository }}" \
+              '{type:$type, dedupeId:$runId, runId:$runId, runUrl:$runUrl, commit:$commit, branch:$branch, workflow:$workflow, repository:$repository}')"
+
+      - name: Notify Cursor — Dependabot PR opened
+        if: github.event_name == 'pull_request'
+        env:
+          RELAY_URL: ${{ secrets.CURSOR_AUTOMATION_RELAY_URL }}
+          RELAY_SECRET: ${{ secrets.CURSOR_AUTOMATION_RELAY_SECRET }}
+        run: |
+          if [ -z "$RELAY_URL" ] || [ -z "$RELAY_SECRET" ]; then
+            echo "CURSOR_AUTOMATION_RELAY_URL or CURSOR_AUTOMATION_RELAY_SECRET not set — skipping."
+            exit 0
+          fi
+          curl -fsS -X POST "$RELAY_URL/webhooks/automation/github" \
+            -H "Content-Type: application/json" \
+            -H "x-cursor-automation-relay-secret: $RELAY_SECRET" \
+            -d "$(jq -n \
+              --arg type "dependabot-pr" \
+              --arg pullNumber "${{ github.event.pull_request.number }}" \
+              --arg pullUrl "${{ github.event.pull_request.html_url }}" \
+              --arg title "${{ github.event.pull_request.title }}" \
+              --arg branch "${{ github.event.pull_request.base.ref }}" \
+              --arg repository "${{ github.repository }}" \
+              '{type:$type, dedupeId:$pullNumber, pullNumber:$pullNumber, pullUrl:$pullUrl, title:$title, branch:$branch, repository:$repository, actor:"dependabot"}')"

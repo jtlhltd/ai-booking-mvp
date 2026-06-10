@@ -4,7 +4,7 @@
  */
 
 import compression from 'compression';
-import { createSentryCursorRelayRouter } from '../routes/sentry-cursor-relay-mount.js';
+import { createCursorAutomationRelayRouter } from '../routes/cursor-automation-relay-mount.js';
 
 /** Mirrors historical server.js tenant header normalization (must stay early). */
 export function normalizeTenantClientKeyHeaders(req, _res, next) {
@@ -79,7 +79,7 @@ export function registerProbesNotifyMetaRouters(app, p) {
       webhooksFacebookLeadDeps: p.webhooksFacebookLeadDeps
     })
   );
-  app.use(createSentryCursorRelayRouter());
+  app.use(createCursorAutomationRelayRouter());
 }
 
 export function registerLeadsFollowupsMount(app, p) {
