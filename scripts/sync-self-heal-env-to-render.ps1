@@ -72,13 +72,13 @@ try {
 
 # Quick permission check: resolve requires event:write on the single token.
 try {
-  $test = Invoke-RestMethod -Method GET `
-    -Uri "https://de.sentry.io/api/0/organizations/jtlh-ltd/issues/?query=lastSeen:-24h&limit=1" `
+  $testUri = 'https://de.sentry.io/api/0/organizations/jtlh-ltd/issues/?query=lastSeen:-24h&limit=1'
+  $test = Invoke-RestMethod -Method GET -Uri $testUri `
     -Headers @{ Authorization = "Bearer $($env:SENTRY_AUTH_TOKEN)"; Accept = 'application/json' }
   if ($null -eq $test) { throw 'empty response' }
   Write-Host "SENTRY_AUTH_TOKEN: issue read OK (event:read)."
 } catch {
-  Write-Warning "SENTRY_AUTH_TOKEN may lack event:read — poller needs Issue & Event Read."
+  Write-Warning "SENTRY_AUTH_TOKEN may lack event:read - poller needs Issue and Event Read."
 }
 
 Write-Host "Synced self-heal env vars to Render service $ServiceId (merged with existing)."
