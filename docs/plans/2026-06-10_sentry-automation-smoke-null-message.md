@@ -12,7 +12,7 @@
 - `automationSmokeProbeMessage()` returns the stable fallback message `automation smoke probe healthy` when payload is nullish.
 - The route contract test covers armed `/automation-smoke` success and is tied to `ops.automation-smoke-healthy-when-armed`.
 - Required local checks pass: `npm run test:unit`, `npm run test:integration-lite`, and `npm run test:ci`.
-- Changes are committed and pushed to `cursor/sentry-issue-self-healing-d130`.
+- Changes are committed and pushed to `cursor/sentry-issue-self-healing-83e0`.
 - A PR is opened and marked ready.
 - For GREEN shipping: CI `test` and `test-windows` pass, the PR is merged, Render deploy is live, `/health/lb` returns 200 three times, `/automation-smoke` returns either expected disabled 404 or healthy 200, and the Sentry issue is resolved only after verification.
 
