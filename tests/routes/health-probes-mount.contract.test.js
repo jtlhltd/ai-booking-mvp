@@ -93,14 +93,19 @@ describe('routes/health-probes-mount', () => {
     }
   });
 
-  test('GET /heal-test returns 500 when enabled with broken probe (self-heal test arm)', async () => {
+  // intent: ops.self-heal-probes-healthy-when-armed
+  test('GET /heal-test returns healthy message when enabled (self-heal verification arm)', async () => {
     const prevHealTest = process.env.HEAL_TEST_ENABLED;
     const prevSentryDsn = process.env.SENTRY_DSN;
     process.env.HEAL_TEST_ENABLED = 'true';
     process.env.SENTRY_DSN = 'https://public@example.com/1';
     try {
       const res = await request(buildApp()).get('/heal-test');
-      expect(res.status).toBe(500);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        ok: true,
+        message: 'heal test probe healthy'
+      });
     } finally {
       if (prevHealTest === undefined) delete process.env.HEAL_TEST_ENABLED;
       else process.env.HEAL_TEST_ENABLED = prevHealTest;
@@ -109,7 +114,7 @@ describe('routes/health-probes-mount', () => {
     }
   });
 
-  // intent: ops.automation-smoke-healthy-when-armed
+  // intent: ops.self-heal-probes-healthy-when-armed
   test('GET /automation-smoke returns healthy message when enabled (self-heal verification arm)', async () => {
     const prevSmoke = process.env.AUTOMATION_SMOKE_ENABLED;
     const prevSentryDsn = process.env.SENTRY_DSN;
