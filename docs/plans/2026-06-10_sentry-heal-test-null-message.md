@@ -35,3 +35,7 @@
 - Risk: losing an intentional failure probe could affect self-heal demonstrations. Mitigation: keep the route gated and only make the armed route return the stable success envelope expected by this automation.
 - Risk: stale docs/tests could still describe `/heal-test` as a broken probe. Mitigation: update both the intent contract and route test in the same change.
 - Rollback: revert the focused commit if `/heal-test` must intentionally throw again for a separate controlled test workflow.
+
+## Amendments
+
+- The first integration-lite run picked up live Twilio/Vapi environment variables from the cloud shell, causing unrelated webhook/dev-route contract tests to exercise signed/remote branches. Rerun `npm run test:integration-lite` with those external-service env vars unset for contract-test isolation.
