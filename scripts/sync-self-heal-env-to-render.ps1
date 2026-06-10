@@ -53,8 +53,11 @@ $existing['CURSOR_SELF_HEAL_WEBHOOK_AUTH'] = ($env:CURSOR_SELF_HEAL_WEBHOOK_AUTH
 $existing['SENTRY_SELF_HEAL_RELAY_SECRET'] = $env:SENTRY_SELF_HEAL_RELAY_SECRET
 $existing['SENTRY_AUTH_TOKEN'] = $env:SENTRY_AUTH_TOKEN
 $existing.Remove('SENTRY_RESOLVE_AUTH_TOKEN') | Out-Null
-if ($env:AUTOMATION_SMOKE_ENABLED) { $existing['AUTOMATION_SMOKE_ENABLED'] = $env:AUTOMATION_SMOKE_ENABLED }
-if ($env:SENTRY_SELF_HEAL_POLLER_ENABLED) { $existing['SENTRY_SELF_HEAL_POLLER_ENABLED'] = $env:SENTRY_SELF_HEAL_POLLER_ENABLED }
+foreach ($toggleKey in @('AUTOMATION_SMOKE_ENABLED', 'SENTRY_SELF_HEAL_POLLER_ENABLED', 'HEAL_TEST_ENABLED')) {
+  if (Test-Path "env:$toggleKey") {
+    $existing[$toggleKey] = (Get-Item "env:$toggleKey").Value
+  }
+}
 
 $body = @($existing.GetEnumerator() | ForEach-Object { @{ key = $_.Key; value = $_.Value } })
 Invoke-RestMethod -Method PUT `

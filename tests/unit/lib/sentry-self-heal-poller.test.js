@@ -56,4 +56,38 @@ describe('lib/sentry-self-heal-poller', () => {
     expect(result.skipped).toBe(true);
     expect(forwardMock).not.toHaveBeenCalled();
   });
+
+  test('pollSentryForSelfHeal skips test_notification and heal-test noise', async () => {
+    process.env.SENTRY_SELF_HEAL_POLLER_ENABLED = 'true';
+    process.env.SENTRY_AUTH_TOKEN = 'test-token';
+    delete process.env.HEAL_TEST_ENABLED;
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => [
+        {
+          id: '1',
+          shortId: 'AI-BOOKING-MVP-5',
+          title: 'Test Issue',
+          culprit: 'Test notification',
+          issueCategory: 'test_notification',
+          issueType: 'send-test-notification',
+          lastSeen: new Date().toISOString()
+        },
+        {
+          id: '2',
+          shortId: 'AI-BOOKING-MVP-6',
+          title: 'TypeError: Cannot read properties of null',
+          culprit: 'GET /heal-test',
+          lastSeen: new Date().toISOString()
+        }
+      ]
+    }));
+
+    const { pollSentryForSelfHeal } = await import('../../../lib/sentry-self-heal-poller.js');
+    const result = await pollSentryForSelfHeal();
+
+    expect(result.ok).toBe(true);
+    expect(result.triggered).toEqual([]);
+    expect(forwardMock).not.toHaveBeenCalled();
+  });
 });
