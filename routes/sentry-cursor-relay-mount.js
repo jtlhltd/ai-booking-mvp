@@ -1,5 +1,6 @@
 import express from 'express';
 import { forwardToCursorSelfHealWebhook } from '../lib/sentry-cursor-relay.js';
+import { resolveSentryIssue } from '../lib/sentry-resolve-issue.js';
 
 function relaySecretMatches(req) {
   const expected = process.env.SENTRY_SELF_HEAL_RELAY_SECRET;
@@ -34,6 +35,23 @@ export function createSentryCursorRelayRouter() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const status = message.includes('Could not resolve Sentry issue id') ? 400 : 502;
+      return res.status(status).json({ ok: false, error: message });
+    }
+  });
+
+  router.post('/webhooks/sentry-self-heal/resolve', express.json({ limit: '64kb' }), async (req, res) => {
+    if (!relaySecretMatches(req)) {
+      return res.status(401).json({ ok: false, error: 'unauthorized' });
+    }
+
+    try {
+      const result = await resolveSentryIssue(req.body, {
+        reason: req.body?.reason || req.body?.comment
+      });
+      return res.status(200).json({ ok: true, resolved: true, ...result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = message.includes('Could not resolve') ? 400 : 502;
       return res.status(status).json({ ok: false, error: message });
     }
   });

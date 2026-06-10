@@ -8,6 +8,7 @@ describe('routes/sentry-cursor-relay-mount', () => {
   const originalSecret = process.env.SENTRY_SELF_HEAL_RELAY_SECRET;
   const originalUrl = process.env.CURSOR_SELF_HEAL_WEBHOOK_URL;
   const originalAuth = process.env.CURSOR_SELF_HEAL_WEBHOOK_AUTH;
+  const originalResolveToken = process.env.SENTRY_RESOLVE_AUTH_TOKEN;
 
   afterEach(() => {
     global.fetch = originalFetch;
@@ -17,6 +18,8 @@ describe('routes/sentry-cursor-relay-mount', () => {
     else process.env.CURSOR_SELF_HEAL_WEBHOOK_URL = originalUrl;
     if (originalAuth === undefined) delete process.env.CURSOR_SELF_HEAL_WEBHOOK_AUTH;
     else process.env.CURSOR_SELF_HEAL_WEBHOOK_AUTH = originalAuth;
+    if (originalResolveToken === undefined) delete process.env.SENTRY_RESOLVE_AUTH_TOKEN;
+    else process.env.SENTRY_RESOLVE_AUTH_TOKEN = originalResolveToken;
   });
 
   function buildApp() {
@@ -60,5 +63,21 @@ describe('routes/sentry-cursor-relay-mount', () => {
       .send({ issue: { id: 'AI-BOOKING-MVP-7' } });
 
     expect(res.status).toBe(401);
+  });
+
+  test('POST /webhooks/sentry-self-heal/resolve resolves issue via Sentry API', async () => {
+    process.env.SENTRY_RESOLVE_AUTH_TOKEN = 'sntryu_resolve';
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ status: 'resolved' })
+    }));
+
+    const res = await request(buildApp())
+      .post('/webhooks/sentry-self-heal/resolve')
+      .send({ issue: { id: 'AI-BOOKING-MVP-7' }, reason: 'prod verified' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.resolved).toBe(true);
+    expect(res.body.issueId).toBe('AI-BOOKING-MVP-7');
   });
 });
