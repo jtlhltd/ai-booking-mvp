@@ -11,7 +11,8 @@ $ErrorActionPreference = "Stop"
 $required = @(
   'CURSOR_SELF_HEAL_WEBHOOK_URL',
   'CURSOR_SELF_HEAL_WEBHOOK_AUTH',
-  'SENTRY_SELF_HEAL_RELAY_SECRET'
+  'SENTRY_SELF_HEAL_RELAY_SECRET',
+  'SENTRY_AUTH_TOKEN'
 )
 foreach ($key in $required) {
   if (-not (Get-Item "env:$key" -ErrorAction SilentlyContinue)) {
@@ -50,7 +51,8 @@ do {
 $existing['CURSOR_SELF_HEAL_WEBHOOK_URL'] = $env:CURSOR_SELF_HEAL_WEBHOOK_URL
 $existing['CURSOR_SELF_HEAL_WEBHOOK_AUTH'] = ($env:CURSOR_SELF_HEAL_WEBHOOK_AUTH -replace '^Bearer\s+', '').Trim()
 $existing['SENTRY_SELF_HEAL_RELAY_SECRET'] = $env:SENTRY_SELF_HEAL_RELAY_SECRET
-if ($env:SENTRY_RESOLVE_AUTH_TOKEN) { $existing['SENTRY_RESOLVE_AUTH_TOKEN'] = $env:SENTRY_RESOLVE_AUTH_TOKEN }
+$existing['SENTRY_AUTH_TOKEN'] = $env:SENTRY_AUTH_TOKEN
+$existing.Remove('SENTRY_RESOLVE_AUTH_TOKEN') | Out-Null
 if ($env:AUTOMATION_SMOKE_ENABLED) { $existing['AUTOMATION_SMOKE_ENABLED'] = $env:AUTOMATION_SMOKE_ENABLED }
 if ($env:SENTRY_SELF_HEAL_POLLER_ENABLED) { $existing['SENTRY_SELF_HEAL_POLLER_ENABLED'] = $env:SENTRY_SELF_HEAL_POLLER_ENABLED }
 
@@ -58,6 +60,26 @@ $body = @($existing.GetEnumerator() | ForEach-Object { @{ key = $_.Key; value = 
 Invoke-RestMethod -Method PUT `
   -Uri "https://api.render.com/v1/services/$ServiceId/env-vars" `
   -Headers $headers -Body ($body | ConvertTo-Json -Depth 4)
+
+try {
+  Invoke-RestMethod -Method DELETE `
+    -Uri "https://api.render.com/v1/services/$ServiceId/env-vars/SENTRY_RESOLVE_AUTH_TOKEN" `
+    -Headers $headers | Out-Null
+  Write-Host "Removed legacy SENTRY_RESOLVE_AUTH_TOKEN from Render."
+} catch {
+  # not set — fine
+}
+
+# Quick permission check: resolve requires event:write on the single token.
+try {
+  $test = Invoke-RestMethod -Method GET `
+    -Uri "https://de.sentry.io/api/0/organizations/jtlh-ltd/issues/?query=lastSeen:-24h&limit=1" `
+    -Headers @{ Authorization = "Bearer $($env:SENTRY_AUTH_TOKEN)"; Accept = 'application/json' }
+  if ($null -eq $test) { throw 'empty response' }
+  Write-Host "SENTRY_AUTH_TOKEN: issue read OK (event:read)."
+} catch {
+  Write-Warning "SENTRY_AUTH_TOKEN may lack event:read — poller needs Issue & Event Read."
+}
 
 Write-Host "Synced self-heal env vars to Render service $ServiceId (merged with existing)."
 Write-Host "Render will redeploy automatically. Test in ~2 min:"
