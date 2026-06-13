@@ -34,3 +34,7 @@
 - Risk: changing the monitor schedule could create a new monitor in Sentry if the SDK treats schedule changes unexpectedly; the slug remains unchanged to avoid this.
 - Risk: tests may expose unrelated existing failures; keep the code diff limited and report unrelated failures separately.
 - Rollback: revert the single commit to restore the prior Sentry monitor schedule.
+
+## Amendments
+
+- CI failed before Jest on the route inventory gate because `routes/sentry-cursor-relay-mount.js` was not referenced by a route test path string. Add a minimal alias contract in the existing Sentry relay route contract test; no runtime relay behavior changes.
