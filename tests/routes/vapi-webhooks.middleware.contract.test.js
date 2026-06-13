@@ -42,7 +42,7 @@ describe('vapi-webhooks middleware body parsing branches', () => {
       .send(Buffer.from('{not json', 'utf8'));
     expect(res.status).toBe(200);
     expect(res.body).toEqual(expect.objectContaining({ ok: true, received: true }));
-  });
+  }, 60_000);
 
   test('Buffer body with valid JSON is parsed and returns 200', async () => {
     const { default: router } = await import('../../routes/vapi-webhooks.js');

@@ -36,3 +36,4 @@ Each automation needs its own Cursor webhook URL + auth from cursor.com/automati
    - [ci-failed.md](./ci-failed.md)
    - [dependabot-triage.md](./dependabot-triage.md)
    - [deploy-failed.md](./deploy-failed.md)
+   - [self-heal-caveats-fix.md](./self-heal-caveats-fix.md) — Render MCP + integration-lite caveats
