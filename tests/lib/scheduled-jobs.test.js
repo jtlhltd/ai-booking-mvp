@@ -1,9 +1,19 @@
 import { describe, expect, test, jest, beforeEach, afterEach } from '@jest/globals';
 
 const schedule = jest.fn();
+const withMonitor = jest.fn(async (_slug, fn) => fn());
+const startSpan = jest.fn(async (_opts, fn) => fn());
+const isSentryEnabled = jest.fn(() => true);
 
 jest.unstable_mockModule('node-cron', () => ({
   default: { schedule }
+}));
+jest.unstable_mockModule('@sentry/node', () => ({
+  withMonitor
+}));
+jest.unstable_mockModule('../../lib/sentry.js', () => ({
+  startSpan,
+  isSentryEnabled
 }));
 
 const monitorAllClients = jest.fn(async () => {});
@@ -19,6 +29,8 @@ const reapStuckWebhookEventProcessing = jest.fn(async () => ({ reset: 0 }));
 const checkOpsInvariants = jest.fn(async () => {});
 const cleanupDLQ = jest.fn(async () => ({ deleted: 0 }));
 const processWebhookRetryQueue = jest.fn(async () => ({ processed: 0, success: 0, failed: 0 }));
+const pollSentryForSelfHeal = jest.fn(async () => ({ ok: true, triggered: [] }));
+const pollRenderForDeployFailures = jest.fn(async () => ({ ok: true, triggered: [] }));
 
 jest.unstable_mockModule('../../lib/quality-monitoring.js', () => ({ monitorAllClients }));
 jest.unstable_mockModule('../../lib/appointment-reminders.js', () => ({ processReminderQueue }));
@@ -35,6 +47,8 @@ jest.unstable_mockModule('../../lib/stuck-processing-reaper.js', () => ({
 jest.unstable_mockModule('../../lib/ops-invariants.js', () => ({ checkOpsInvariants }));
 jest.unstable_mockModule('../../lib/dead-letter-queue.js', () => ({ cleanupDLQ }));
 jest.unstable_mockModule('../../lib/webhook-retry.js', () => ({ processWebhookRetryQueue }));
+jest.unstable_mockModule('../../lib/sentry-self-heal-poller.js', () => ({ pollSentryForSelfHeal }));
+jest.unstable_mockModule('../../lib/render-deploy-failure-poller.js', () => ({ pollRenderForDeployFailures }));
 
 async function flushPromises(times = 1) {
   for (let i = 0; i < times; i++) {
@@ -48,6 +62,11 @@ async function flushPromises(times = 1) {
 describe('registerScheduledJobs', () => {
   beforeEach(() => {
     schedule.mockClear();
+    withMonitor.mockClear();
+    startSpan.mockClear();
+    isSentryEnabled.mockReturnValue(true);
+    pollSentryForSelfHeal.mockClear();
+    pollRenderForDeployFailures.mockClear();
     jest.useFakeTimers();
   });
 
@@ -74,6 +93,8 @@ describe('registerScheduledJobs', () => {
       '0-58/2 * * * *',
       '1-59/2 * * * *',
       '*/5 * * * *',
+      '9-59/5 * * * *',
+      '11-59/5 * * * *',
       '0 9 * * 1'
     ]));
 
@@ -114,6 +135,35 @@ describe('registerScheduledJobs', () => {
       throw new Error('nope');
     });
     await expect(handler()).resolves.toBeUndefined();
+    reg?.stop?.();
+  });
+
+  test('render deploy failure poller registers matching Sentry monitor schedule', async () => {
+    const { registerScheduledJobs } = await import('../../lib/scheduled-jobs.js');
+
+    const reg = registerScheduledJobs();
+    await flushPromises(5);
+
+    const deployPollerEntry = schedule.mock.calls.find((c) => c[0] === '11-59/5 * * * *');
+    expect(deployPollerEntry).toBeTruthy();
+
+    const handler = deployPollerEntry[1];
+    await handler();
+
+    expect(pollRenderForDeployFailures).toHaveBeenCalledTimes(1);
+    expect(withMonitor).toHaveBeenCalledWith(
+      'render-deploy-failure-poller',
+      expect.any(Function),
+      {
+        schedule: { type: 'crontab', value: '11,16,21,26,31,36,41,46,51,56 * * * *' },
+        checkinMargin: 8,
+        maxRuntime: 5,
+        timezone: 'UTC',
+        failureIssueThreshold: 2,
+        recoveryThreshold: 1,
+      }
+    );
+
     reg?.stop?.();
   });
 });
