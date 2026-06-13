@@ -2,6 +2,7 @@ import request from 'supertest';
 import express from 'express';
 import { jest } from '@jest/globals';
 import { createCursorAutomationRelayRouter } from '../../routes/cursor-automation-relay-mount.js';
+import { createSentryCursorRelayRouter } from '../../routes/sentry-cursor-relay-mount.js';
 import { resetAutomationTriggerDedupeForTests } from '../../lib/automation-trigger-dedupe.js';
 
 describe('routes/cursor-automation-relay-mount', () => {
@@ -112,5 +113,9 @@ describe('routes/cursor-automation-relay-mount', () => {
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.automation).toBe('ci-failed');
+  });
+
+  test('sentry-cursor-relay mount exports the relay router alias', () => {
+    expect(createSentryCursorRelayRouter).toBe(createCursorAutomationRelayRouter);
   });
 });
