@@ -1,8 +1,11 @@
+import { EventEmitter } from 'events';
 import { describe, test, expect, jest, beforeAll } from '@jest/globals';
 
-const PoolMock = jest.fn().mockImplementation(() => ({
-  query: jest.fn().mockResolvedValue({ rows: [{ '?column?': 1 }] }),
-}));
+const PoolMock = jest.fn().mockImplementation(() => {
+  const pool = new EventEmitter();
+  pool.query = jest.fn().mockResolvedValue({ rows: [{ '?column?': 1 }] });
+  return pool;
+});
 
 jest.unstable_mockModule('pg', () => ({
   default: { Pool: PoolMock },
@@ -43,6 +46,7 @@ describe('db/connection.js', () => {
 
   test('createPostgresPoolAndLimiter wires pool and optional limiter', async () => {
     PoolMock.mockClear();
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     const { pool, pgQueryLimiter, maxConnections } = createPostgresPoolAndLimiter(
       'postgresql://u:p@db.example.com:5432/db',
       { RENDER: 'true', DB_POOL_MAX: '4', DB_QUERY_CONCURRENCY: '2' },
@@ -53,6 +57,11 @@ describe('db/connection.js', () => {
     expect(pgQueryLimiter).not.toBeNull();
     await testPostgresPoolConnection(pool, 5000);
     expect(pool.query).toHaveBeenCalled();
+    expect(() => pool.emit('error', Object.assign(new Error('Connection terminated unexpectedly'), { code: 'ECONNRESET' }))).not.toThrow();
+    expect(consoleError).toHaveBeenCalledWith(
+      '[DB POOL ERROR] Unexpected idle PG client error code=ECONNRESET: Connection terminated unexpectedly'
+    );
+    consoleError.mockRestore();
   });
 
   test('createPostgresPoolAndLimiter passes DB_STATEMENT_TIMEOUT_MS to pool', () => {
