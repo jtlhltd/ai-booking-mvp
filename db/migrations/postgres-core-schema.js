@@ -147,9 +147,18 @@ export async function ensurePostgresCoreSchema(pool) {
       WHERE recording_url IS NOT NULL
         AND trim(recording_url) <> ''
         AND lower(coalesce(outcome, '')) = 'voicemail';
-    -- Catch-up requeue: find failed_q backlog efficiently
+    -- Catch-up requeue: find failed_q backlog efficiently (indexed dial key, not regexp on lead_phone)
     CREATE INDEX IF NOT EXISTS calls_failed_q_client_phone_created_desc_idx
       ON calls (client_key, lead_phone, created_at DESC)
+      WHERE call_id LIKE 'failed_q%';
+    CREATE INDEX IF NOT EXISTS calls_failed_q_client_dial_match_key_created_desc_idx
+      ON calls (client_key, COALESCE(lead_phone_match_key, '__nodigits__'), created_at DESC)
+      WHERE call_id LIKE 'failed_q%';
+    CREATE INDEX IF NOT EXISTS calls_client_dial_match_key_success_created_desc_idx
+      ON calls (client_key, COALESCE(lead_phone_match_key, '__nodigits__'), created_at DESC)
+      WHERE call_id NOT LIKE 'failed_q%';
+    CREATE INDEX IF NOT EXISTS calls_failed_q_created_client_idx
+      ON calls (created_at DESC, client_key)
       WHERE call_id LIKE 'failed_q%';
 
     -- Legacy: per-calendar-day dial claims. App no longer writes here (Mon–Fri journey uses outbound_weekday_journey). Kept for historical rows / optional TRUNCATE in ops.

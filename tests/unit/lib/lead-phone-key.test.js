@@ -4,7 +4,8 @@ import {
   phoneMatchKey,
   outboundDialClaimKeyFromRaw,
   pgLeadPhoneKeyExpr,
-  pgQueueLeadPhoneKeyExpr
+  pgQueueLeadPhoneKeyExpr,
+  pgCallsDialMatchKeyExpr
 } from '../../../lib/lead-phone-key.js';
 
 describe('lib/lead-phone-key', () => {
@@ -30,6 +31,12 @@ describe('lib/lead-phone-key', () => {
   test('pgQueueLeadPhoneKeyExpr includes __nodigits__ fallback', () => {
     const expr = pgQueueLeadPhoneKeyExpr('cq.lead_phone');
     expect(expr).toMatch(/__nodigits__/);
+  });
+
+  test('pgCallsDialMatchKeyExpr matches indexed COALESCE weak-key', () => {
+    expect(pgCallsDialMatchKeyExpr('c.lead_phone_match_key')).toBe(
+      "COALESCE(c.lead_phone_match_key, '__nodigits__')"
+    );
   });
 });
 

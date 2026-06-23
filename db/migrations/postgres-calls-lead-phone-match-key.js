@@ -29,6 +29,23 @@ export async function migratePostgresCallsLeadPhoneMatchKey(pgPool) {
     WHERE lead_phone_match_key IS NOT NULL;
   `);
 
+  // failed_q catch-up: avoid 100s+ scans from regexp-based NOT EXISTS (see server-queue-workers.js)
+  await pgPool.query(`
+    CREATE INDEX IF NOT EXISTS calls_failed_q_client_dial_match_key_created_desc_idx
+    ON calls (client_key, COALESCE(lead_phone_match_key, '__nodigits__'), created_at DESC)
+    WHERE call_id LIKE 'failed_q%';
+  `);
+  await pgPool.query(`
+    CREATE INDEX IF NOT EXISTS calls_client_dial_match_key_success_created_desc_idx
+    ON calls (client_key, COALESCE(lead_phone_match_key, '__nodigits__'), created_at DESC)
+    WHERE call_id NOT LIKE 'failed_q%';
+  `);
+  await pgPool.query(`
+    CREATE INDEX IF NOT EXISTS calls_failed_q_created_client_idx
+    ON calls (created_at DESC, client_key)
+    WHERE call_id LIKE 'failed_q%';
+  `);
+
   console.log('✅ calls.lead_phone_match_key migration complete');
 }
 

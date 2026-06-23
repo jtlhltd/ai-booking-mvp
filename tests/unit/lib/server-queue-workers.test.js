@@ -289,6 +289,53 @@ describe('lib/server-queue-workers', () => {
     jest.useRealTimers();
   });
 
+  test('processCallQueue failed_q catch-up uses indexed lead_phone_match_key (not regexp)', async () => {
+    const query = jest.fn(async (sql) => {
+      const s = String(sql);
+      if (s.includes("FROM call_queue WHERE status = 'pending'") && s.includes('COUNT')) {
+        return { rows: [{ n: 0 }] };
+      }
+      if (s.includes("call_id LIKE 'failed_q%'") && s.includes('GROUP BY client_key')) {
+        return { rows: [{ client_key: 'c1', n: 2 }] };
+      }
+      if (s.includes('WITH candidates AS') && s.includes("call_id LIKE 'failed_q%'")) {
+        return { rows: [] };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const getFullClient = jest.fn(async () => ({ clientKey: 'c1', timezone: 'UTC', booking: { timezone: 'UTC' } }));
+
+    jest.unstable_mockModule('../../../db.js', () => ({
+      query,
+      poolQuerySelect: jest.fn(async () => ({ rows: [] })),
+      getFullClient,
+      listFullClients: jest.fn(async () => []),
+      addToCallQueue: jest.fn(async () => {}),
+      smearCallQueueScheduledFor: jest.fn((d) => d),
+      invalidateClientCache: jest.fn(async () => {}),
+      getPendingCalls: jest.fn(async () => []),
+      getPendingRetries: jest.fn(async () => []),
+      updateRetryStatus: jest.fn(async () => {}),
+      updateCallQueueStatus: jest.fn(async () => {}),
+      cancelDuplicatePendingCalls: jest.fn(async () => {})
+    }));
+    jest.unstable_mockModule('../../../lib/server-queue-workers-shared.js', () => ({
+      TIMEZONE: 'UTC',
+      isBusinessHours: jest.fn(() => true),
+      getNextBusinessHour: jest.fn(() => new Date('2030-01-01T10:00:00.000Z')),
+      pickTimezone: jest.fn(() => 'UTC')
+    }));
+
+    const { processCallQueue } = await import('../../../lib/server-queue-workers.js');
+    await processCallQueue();
+
+    const catchupSql = query.mock.calls.map(([sql]) => String(sql)).find((s) => s.includes('WITH candidates AS'));
+    expect(catchupSql).toBeDefined();
+    expect(catchupSql).toContain('lead_phone_match_key');
+    expect(catchupSql).not.toContain('regexp_replace');
+    expect(catchupSql).toContain('cq.lead_phone = c.lead_phone');
+  });
+
   test('processRetryQueue resets stale processing retries to pending before fetching pending retries', async () => {
     const query = jest.fn(async (sql) => {
       if (String(sql).includes('WITH stale AS') && String(sql).includes('UPDATE retry_queue rq')) {

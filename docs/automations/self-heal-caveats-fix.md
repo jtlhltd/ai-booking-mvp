@@ -2,13 +2,11 @@
 
 ## Caveat 1: Render MCP unauthorized / no workspace
 
-Cloud agents do **not** use your local `~/.cursor/mcp.json`. Render must be wired in **two places**.
+Render is **MCP-only** in Cursor (no separate Integrations tile like Sentry/GitHub). Skip dashboard Integrations — **B + C below are enough**.
 
-### A. Cursor Dashboard — Integrations
+### A. ~~Cursor Dashboard — Integrations~~ (not available)
 
-1. Open [cursor.com/dashboard → Integrations](https://cursor.com/dashboard?tab=integrations)
-2. Find **Render** → **Connect**
-3. Authorize with the Render account that owns `ai-booking-mvp`
+Render connects via the **Render MCP plugin** in automation Tools (step B), not cursor.com/dashboard → Integrations.
 
 ### B. Automation — Tools
 
