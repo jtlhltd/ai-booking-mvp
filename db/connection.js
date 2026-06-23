@@ -58,6 +58,12 @@ export function createPostgresPoolAndLimiter(dbUrl, env = process.env) {
     allowExitOnIdle: true,
   });
 
+  pool.on('error', (error) => {
+    const code = error?.code ? ` code=${error.code}` : '';
+    const message = error?.message || String(error || 'unknown error');
+    console.error(`[DB POOL ERROR] Unexpected idle PG client error${code}: ${message}`);
+  });
+
   const rawQc = parseInt(env.DB_QUERY_CONCURRENCY, 10);
   let queryConc;
   if (rawQc === 0) {

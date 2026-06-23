@@ -9,6 +9,7 @@ beforeEach(() => {
 });
 
 describe('routes/health-and-diagnostics.js contracts', () => {
+  // intent: ops.pg-pool-idle-error-nonfatal
   test('GET /call-status reports missing Vapi vars', async () => {
     await withEnv({ VAPI_PRIVATE_KEY: undefined, VAPI_ASSISTANT_ID: undefined, VAPI_PHONE_NUMBER_ID: undefined }, async () => {
       jest.unstable_mockModule('../../lib/circuit-breaker.js', () => ({
