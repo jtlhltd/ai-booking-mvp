@@ -117,6 +117,15 @@ async function initPostgres() {
       console.warn('⚠️  Tom outbound_sequence_json seed (non-fatal):', seedErr?.message || seedErr);
     }
 
+    try {
+      const { migrateTerryIngredientsOutreachPostgres } = await import(
+        './db/migrations/seed-terry-ingredients-outreach.js'
+      );
+      await migrateTerryIngredientsOutreachPostgres(pool);
+    } catch (seedErr) {
+      console.warn('⚠️  Terry ingredients outreach seed (non-fatal):', seedErr?.message || seedErr);
+    }
+
   // Add missing columns to existing tables (safe migration)
   // This handles cases where tables exist but are missing new columns
   try {
@@ -327,6 +336,14 @@ export async function init() {
     migrateTomOutboundSequenceSqlite(sqlite);
   } catch (seedErr) {
     console.warn('⚠️  Tom outbound_sequence_json seed sqlite (non-fatal):', seedErr?.message || seedErr);
+  }
+  try {
+    const { migrateTerryIngredientsOutreachSqlite } = await import(
+      './db/migrations/seed-terry-ingredients-outreach.js'
+    );
+    migrateTerryIngredientsOutreachSqlite(sqlite);
+  } catch (seedErr) {
+    console.warn('⚠️  Terry ingredients outreach seed sqlite (non-fatal):', seedErr?.message || seedErr);
   }
   await getCallAnalyticsFloorIso().catch((e) =>
     console.warn('[call_analytics_floor] init:', e.message)

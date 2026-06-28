@@ -134,6 +134,7 @@ const rules = [
       'demos/',
       // Seed / migration SQL references the anchor tenant key (not customer-facing).
       'db/migrations/seed-tom-outbound-sequence.js',
+      'db/migrations/seed-terry-ingredients-outreach.js',
       // Public dashboard HTML only references the slug in comments and
       // an explicit "DEMO_DATA must NOT load for d2d-xpress-tom" guard.
       'public/client-dashboard.html',
