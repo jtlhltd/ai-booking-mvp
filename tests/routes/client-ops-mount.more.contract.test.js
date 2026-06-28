@@ -334,10 +334,10 @@ describe('client-ops-mount contract coverage', () => {
     await request(app).get('/api/clients/c1/vapi/assistants').expect(401);
   });
 
-  test('GET /api/clients/:clientKey/vapi/assistants returns list', async () => {
+  test('GET /api/clients/:clientKey/vapi/assistants returns current bot only', async () => {
     jest.unstable_mockModule('../../lib/vapi-assistant-admin.js', () => ({
       getVapiPrivateKey: () => 'k',
-      listVapiAssistants: jest.fn(async () => [{ id: 'asst_1', name: 'Terry', firstMessage: 'Hi' }]),
+      getVapiAssistant: jest.fn(async () => ({ id: 'asst_1', name: 'Terry', firstMessage: 'Hi' })),
       summarizeAssistant: (a) => ({ id: a.id, name: a.name, firstMessagePreview: a.firstMessage, updatedAt: null }),
     }));
     const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');

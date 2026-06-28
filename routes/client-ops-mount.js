@@ -117,6 +117,15 @@ export function createClientOpsRouter(deps) {
   });
 
   // Vapi assistant admin (platform API key — used by Terry call-dashboard proxy)
+  function resolveCurrentAssistantId(client) {
+    const vapi = client?.vapi && typeof client.vapi === 'object' ? client.vapi : {};
+    return (
+      (vapi.assistantId != null && String(vapi.assistantId).trim()) ||
+      (client?.vapiAssistantId != null && String(client.vapiAssistantId).trim()) ||
+      null
+    );
+  }
+
   router.get('/api/clients/:clientKey/vapi/assistants', async (req, res) => {
     if (!hasOperatorApiKey(req)) {
       return res.status(401).json({ ok: false, error: 'Unauthorized' });
@@ -128,20 +137,25 @@ export function createClientOpsRouter(deps) {
         return res.status(404).json({ ok: false, error: 'Client not found' });
       }
       const {
-        listVapiAssistants,
+        getVapiAssistant,
         summarizeAssistant,
         getVapiPrivateKey,
       } = await import('../lib/vapi-assistant-admin.js');
       if (!getVapiPrivateKey()) {
-        return res.status(503).json({ ok: false, error: 'VAPI_PRIVATE_KEY is not configured' });
+        return res.status(503).json({ ok: false, error: 'Call bot service is not configured' });
       }
-      const raw = await listVapiAssistants();
-      const assistants = raw.map(summarizeAssistant).filter(Boolean);
       const vapi = client.vapi && typeof client.vapi === 'object' ? client.vapi : {};
-      const currentAssistantId =
-        (vapi.assistantId != null && String(vapi.assistantId).trim()) ||
-        (client.vapiAssistantId != null && String(client.vapiAssistantId).trim()) ||
-        null;
+      const currentAssistantId = resolveCurrentAssistantId(client);
+      let assistants = [];
+      if (currentAssistantId) {
+        try {
+          const raw = await getVapiAssistant(currentAssistantId);
+          const summary = summarizeAssistant(raw);
+          if (summary) assistants = [summary];
+        } catch (error) {
+          if (error?.code !== 'not_found') throw error;
+        }
+      }
       return res.json({
         ok: true,
         clientKey,
@@ -165,21 +179,20 @@ export function createClientOpsRouter(deps) {
       if (!client) {
         return res.status(404).json({ ok: false, error: 'Client not found' });
       }
+      const currentAssistantId = resolveCurrentAssistantId(client);
+      if (!currentAssistantId || assistantId !== currentAssistantId) {
+        return res.status(403).json({ ok: false, error: 'Assistant not available for this account' });
+      }
       const {
         getVapiAssistant,
         toEditableAssistant,
         getVapiPrivateKey,
       } = await import('../lib/vapi-assistant-admin.js');
       if (!getVapiPrivateKey()) {
-        return res.status(503).json({ ok: false, error: 'VAPI_PRIVATE_KEY is not configured' });
+        return res.status(503).json({ ok: false, error: 'Call bot service is not configured' });
       }
       const raw = await getVapiAssistant(assistantId);
       const assistant = toEditableAssistant(raw);
-      const vapi = client.vapi && typeof client.vapi === 'object' ? client.vapi : {};
-      const currentAssistantId =
-        (vapi.assistantId != null && String(vapi.assistantId).trim()) ||
-        (client.vapiAssistantId != null && String(client.vapiAssistantId).trim()) ||
-        null;
       return res.json({
         ok: true,
         clientKey,
@@ -188,7 +201,7 @@ export function createClientOpsRouter(deps) {
       });
     } catch (error) {
       if (error?.code === 'not_found') {
-        return res.status(404).json({ ok: false, error: 'Assistant not found' });
+        return res.status(404).json({ ok: false, error: 'Call bot not found' });
       }
       console.error('[VAPI ASSISTANT GET ERROR]', error);
       return res.status(500).json({ ok: false, error: error.message });
@@ -205,9 +218,13 @@ export function createClientOpsRouter(deps) {
       if (!client) {
         return res.status(404).json({ ok: false, error: 'Client not found' });
       }
+      const currentAssistantId = resolveCurrentAssistantId(client);
+      if (!currentAssistantId || assistantId !== currentAssistantId) {
+        return res.status(403).json({ ok: false, error: 'Assistant not available for this account' });
+      }
       const { patchVapiAssistant, getVapiPrivateKey } = await import('../lib/vapi-assistant-admin.js');
       if (!getVapiPrivateKey()) {
-        return res.status(503).json({ ok: false, error: 'VAPI_PRIVATE_KEY is not configured' });
+        return res.status(503).json({ ok: false, error: 'Call bot service is not configured' });
       }
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       const assistant = await patchVapiAssistant(assistantId, {
@@ -243,11 +260,11 @@ export function createClientOpsRouter(deps) {
       }
       const { assistantExistsInOrg, getVapiPrivateKey } = await import('../lib/vapi-assistant-admin.js');
       if (!getVapiPrivateKey()) {
-        return res.status(503).json({ ok: false, error: 'VAPI_PRIVATE_KEY is not configured' });
+        return res.status(503).json({ ok: false, error: 'Call bot service is not configured' });
       }
       const exists = await assistantExistsInOrg(assistantId);
       if (!exists) {
-        return res.status(400).json({ ok: false, error: 'Assistant not found in Vapi account' });
+        return res.status(400).json({ ok: false, error: 'Call bot not found' });
       }
       const { updateClientConfig } = await import('../lib/client-onboarding.js');
       const result = await updateClientConfig(clientKey, {
