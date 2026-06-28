@@ -125,14 +125,28 @@ export function createLeadHandoffDomain({ query, phoneMatchKey, dbType }) {
     const phone = String(leadPhone || '').trim();
     const matchKey = phoneMatchKey(phone);
     if (!matchKey) throw new Error('setOperatorNotes requires leadPhone');
+    const notes = String(operatorNotes || '').slice(0, 20000);
     const updatedAtIso = new Date().toISOString();
+    const isPostgres = String(dbType || '').toLowerCase() === 'postgres';
+    const emptyDataJson = isPostgres ? `'{}'::jsonb` : `'{}'`;
     await query(
       `
-      UPDATE lead_handoff
-      SET operator_notes = $3, updated_at = $4
-      WHERE client_key = $1 AND phone_match_key = $2
+      INSERT INTO lead_handoff (
+        client_key,
+        phone_match_key,
+        lead_phone,
+        source,
+        data_json,
+        operator_notes,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, ${emptyDataJson}, $5, $6)
+      ON CONFLICT (client_key, phone_match_key)
+      DO UPDATE SET
+        lead_phone = COALESCE(EXCLUDED.lead_phone, lead_handoff.lead_phone),
+        operator_notes = EXCLUDED.operator_notes,
+        updated_at = EXCLUDED.updated_at
     `,
-      [clientKey, matchKey, String(operatorNotes || '').slice(0, 20000), updatedAtIso]
+      [clientKey, matchKey, phone, 'operator_notes', notes, updatedAtIso]
     );
   }
 
