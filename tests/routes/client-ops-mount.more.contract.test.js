@@ -326,5 +326,62 @@ describe('client-ops-mount contract coverage', () => {
       source: 'vapi_webhook.sequence_abandoned',
     }));
   });
+
+  test('GET /api/clients/:clientKey/vapi/assistants returns 401 without API key', async () => {
+    const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');
+    const router = createClientOpsRouter({ getFullClient: jest.fn(async () => ({})) });
+    const app = createContractApp({ mounts: [{ path: '/', router }] });
+    await request(app).get('/api/clients/c1/vapi/assistants').expect(401);
+  });
+
+  test('GET /api/clients/:clientKey/vapi/assistants returns list', async () => {
+    jest.unstable_mockModule('../../lib/vapi-assistant-admin.js', () => ({
+      getVapiPrivateKey: () => 'k',
+      listVapiAssistants: jest.fn(async () => [{ id: 'asst_1', name: 'Terry', firstMessage: 'Hi' }]),
+      summarizeAssistant: (a) => ({ id: a.id, name: a.name, firstMessagePreview: a.firstMessage, updatedAt: null }),
+    }));
+    const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');
+    const router = createClientOpsRouter({
+      getFullClient: jest.fn(async () => ({ clientKey: 'c1', vapi: { assistantId: 'asst_1' } })),
+    });
+    const app = createContractApp({ mounts: [{ path: '/', router }] });
+    const res = await request(app)
+      .get('/api/clients/c1/vapi/assistants')
+      .set('X-API-Key', 'secret')
+      .expect(200);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        ok: true,
+        currentAssistantId: 'asst_1',
+        assistants: [{ id: 'asst_1', name: 'Terry', firstMessagePreview: 'Hi', updatedAt: null }],
+      }),
+    );
+  });
+
+  test('PATCH /api/clients/:clientKey/vapi/active-assistant updates tenant config', async () => {
+    jest.unstable_mockModule('../../lib/vapi-assistant-admin.js', () => ({
+      getVapiPrivateKey: () => 'k',
+      assistantExistsInOrg: jest.fn(async () => true),
+    }));
+    jest.unstable_mockModule('../../lib/client-onboarding.js', () => ({
+      updateClientConfig: jest.fn(async () => ({
+        ok: true,
+        client: { clientKey: 'c1', vapi: { assistantId: 'asst_2' } },
+      })),
+    }));
+    const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');
+    const router = createClientOpsRouter({
+      getFullClient: jest.fn(async () => ({ clientKey: 'c1', vapi: { assistantId: 'asst_1' } })),
+    });
+    const app = createContractApp({ mounts: [{ path: '/', router }] });
+    const res = await request(app)
+      .patch('/api/clients/c1/vapi/active-assistant')
+      .set('X-API-Key', 'secret')
+      .send({ assistantId: 'asst_2' })
+      .expect(200);
+    expect(res.body).toEqual(
+      expect.objectContaining({ ok: true, currentAssistantId: 'asst_2' }),
+    );
+  });
 });
 

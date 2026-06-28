@@ -116,6 +116,155 @@ export function createClientOpsRouter(deps) {
     }
   });
 
+  // Vapi assistant admin (platform API key — used by Terry call-dashboard proxy)
+  router.get('/api/clients/:clientKey/vapi/assistants', async (req, res) => {
+    if (!hasOperatorApiKey(req)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    try {
+      const { clientKey } = req.params;
+      const client = await getFullClient(clientKey);
+      if (!client) {
+        return res.status(404).json({ ok: false, error: 'Client not found' });
+      }
+      const {
+        listVapiAssistants,
+        summarizeAssistant,
+        getVapiPrivateKey,
+      } = await import('../lib/vapi-assistant-admin.js');
+      if (!getVapiPrivateKey()) {
+        return res.status(503).json({ ok: false, error: 'VAPI_PRIVATE_KEY is not configured' });
+      }
+      const raw = await listVapiAssistants();
+      const assistants = raw.map(summarizeAssistant).filter(Boolean);
+      const vapi = client.vapi && typeof client.vapi === 'object' ? client.vapi : {};
+      const currentAssistantId =
+        (vapi.assistantId != null && String(vapi.assistantId).trim()) ||
+        (client.vapiAssistantId != null && String(client.vapiAssistantId).trim()) ||
+        null;
+      return res.json({
+        ok: true,
+        clientKey,
+        currentAssistantId,
+        phoneNumberId: vapi.phoneNumberId != null ? String(vapi.phoneNumberId) : null,
+        assistants,
+      });
+    } catch (error) {
+      console.error('[VAPI ASSISTANTS LIST ERROR]', error);
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  router.get('/api/clients/:clientKey/vapi/assistants/:assistantId', async (req, res) => {
+    if (!hasOperatorApiKey(req)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    try {
+      const { clientKey, assistantId } = req.params;
+      const client = await getFullClient(clientKey);
+      if (!client) {
+        return res.status(404).json({ ok: false, error: 'Client not found' });
+      }
+      const {
+        getVapiAssistant,
+        toEditableAssistant,
+        getVapiPrivateKey,
+      } = await import('../lib/vapi-assistant-admin.js');
+      if (!getVapiPrivateKey()) {
+        return res.status(503).json({ ok: false, error: 'VAPI_PRIVATE_KEY is not configured' });
+      }
+      const raw = await getVapiAssistant(assistantId);
+      const assistant = toEditableAssistant(raw);
+      const vapi = client.vapi && typeof client.vapi === 'object' ? client.vapi : {};
+      const currentAssistantId =
+        (vapi.assistantId != null && String(vapi.assistantId).trim()) ||
+        (client.vapiAssistantId != null && String(client.vapiAssistantId).trim()) ||
+        null;
+      return res.json({
+        ok: true,
+        clientKey,
+        currentAssistantId,
+        assistant,
+      });
+    } catch (error) {
+      if (error?.code === 'not_found') {
+        return res.status(404).json({ ok: false, error: 'Assistant not found' });
+      }
+      console.error('[VAPI ASSISTANT GET ERROR]', error);
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  router.patch('/api/clients/:clientKey/vapi/assistants/:assistantId', async (req, res) => {
+    if (!hasOperatorApiKey(req)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    try {
+      const { clientKey, assistantId } = req.params;
+      const client = await getFullClient(clientKey);
+      if (!client) {
+        return res.status(404).json({ ok: false, error: 'Client not found' });
+      }
+      const { patchVapiAssistant, getVapiPrivateKey } = await import('../lib/vapi-assistant-admin.js');
+      if (!getVapiPrivateKey()) {
+        return res.status(503).json({ ok: false, error: 'VAPI_PRIVATE_KEY is not configured' });
+      }
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const assistant = await patchVapiAssistant(assistantId, {
+        name: body.name,
+        firstMessage: body.firstMessage,
+        systemPrompt: body.systemPrompt,
+      });
+      return res.json({ ok: true, clientKey, assistant });
+    } catch (error) {
+      if (error?.code === 'not_found') {
+        return res.status(404).json({ ok: false, error: 'Assistant not found' });
+      }
+      console.error('[VAPI ASSISTANT PATCH ERROR]', error);
+      const status = /cannot be empty|not allowed|required|No editable/i.test(error.message) ? 400 : 500;
+      return res.status(status).json({ ok: false, error: error.message });
+    }
+  });
+
+  router.patch('/api/clients/:clientKey/vapi/active-assistant', async (req, res) => {
+    if (!hasOperatorApiKey(req)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    try {
+      const { clientKey } = req.params;
+      const client = await getFullClient(clientKey);
+      if (!client) {
+        return res.status(404).json({ ok: false, error: 'Client not found' });
+      }
+      const assistantId =
+        req.body?.assistantId != null ? String(req.body.assistantId).trim() : '';
+      if (!assistantId) {
+        return res.status(400).json({ ok: false, error: 'assistantId is required' });
+      }
+      const { assistantExistsInOrg, getVapiPrivateKey } = await import('../lib/vapi-assistant-admin.js');
+      if (!getVapiPrivateKey()) {
+        return res.status(503).json({ ok: false, error: 'VAPI_PRIVATE_KEY is not configured' });
+      }
+      const exists = await assistantExistsInOrg(assistantId);
+      if (!exists) {
+        return res.status(400).json({ ok: false, error: 'Assistant not found in Vapi account' });
+      }
+      const { updateClientConfig } = await import('../lib/client-onboarding.js');
+      const result = await updateClientConfig(clientKey, {
+        vapi: { assistantId },
+      });
+      return res.json({
+        ok: true,
+        clientKey,
+        currentAssistantId: assistantId,
+        client: result.client,
+      });
+    } catch (error) {
+      console.error('[VAPI ACTIVE ASSISTANT ERROR]', error);
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
   // Dashboard A/B routes
   router.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
     const { clientKey } = req.params;
