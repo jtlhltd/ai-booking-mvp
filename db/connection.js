@@ -53,7 +53,7 @@ export function createPostgresPoolAndLimiter(dbUrl, env = process.env) {
     ssl: pgSsl,
     max: maxConnections,
     idleTimeoutMillis: 10000,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: env.RENDER === 'true' ? 10000 : 5000,
     statement_timeout: statementTimeout,
     allowExitOnIdle: true,
   });

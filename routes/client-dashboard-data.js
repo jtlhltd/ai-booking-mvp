@@ -751,7 +751,9 @@ export async function handleClientDashboardData(req, res, deps) {
       `,
             [clientKey]
           ),
-      query(
+      skipBriefEnrichment
+        ? stubQueryRows()
+        : query(
         `
         WITH daily AS (
           SELECT
@@ -2044,7 +2046,7 @@ export async function handleClientDashboardData(req, res, deps) {
 
     const poolQuerySelect = deps?.poolQuerySelect;
     let callQuality = null;
-    if (isPostgres && typeof poolQuerySelect === 'function') {
+    if (isPostgres && typeof poolQuerySelect === 'function' && !skipBriefEnrichment) {
       callQuality = await loadDashboardCallQualityPayload(clientKey, { poolQuerySelect });
     }
 
