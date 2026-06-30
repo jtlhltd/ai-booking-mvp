@@ -3,8 +3,10 @@
  * Vapi assistant/phone IDs from TERRY_VAPI_* env or platform VAPI_* fallbacks.
  */
 
+import { TERRY_STRUCTURED_OUTPUT_ID } from '../lib/terry-structured-output.js';
+
 const CLIENT_KEY = 'terry-ingredients-outreach';
-const DEFAULT_SO = process.env.VAPI_STRUCTURED_OUTPUT_ID || '0cff18e4-6a16-4573-a713-cc7e0fcf3e06';
+const DEFAULT_SO = TERRY_STRUCTURED_OUTPUT_ID;
 
 export const TERRY_INGREDIENTS_OUTBOUND_SEQUENCE = {
   enabled: true,

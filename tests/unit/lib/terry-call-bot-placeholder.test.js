@@ -12,6 +12,7 @@ describe('terry-call-bot-placeholder', () => {
     expect(payload.serverUrl).toBe('https://example.com/webhooks/vapi');
     expect(payload.firstMessage).toMatch(/Terry Foods/i);
     expect(payload.model.messages[0].content).toMatch(/marketing intel/i);
+    expect(payload.artifactPlan?.structuredOutputIds?.length).toBeGreaterThan(0);
   });
 
   test('findTerryPlaceholderAssistant matches by name', () => {

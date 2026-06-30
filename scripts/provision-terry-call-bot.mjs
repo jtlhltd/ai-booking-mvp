@@ -21,7 +21,9 @@ import {
 import {
   buildTerryPlaceholderAssistantPayload,
   findTerryPlaceholderAssistant,
+  patchTerryAssistantStructuredOutput,
   TERRY_PLACEHOLDER_ASSISTANT_NAME,
+  TERRY_STRUCTURED_OUTPUT_ID,
 } from '../lib/terry-call-bot-placeholder.js';
 
 const CLIENT_KEY = 'terry-ingredients-outreach';
@@ -57,6 +59,12 @@ async function main() {
   }
 
   const assistantId = String(assistant.id).trim();
+  try {
+    await patchTerryAssistantStructuredOutput(assistantId);
+    console.log(`Structured output ${TERRY_STRUCTURED_OUTPUT_ID} attached to assistant`);
+  } catch (err) {
+    console.warn(`Could not patch structured output (assistant may still work via sequence metadata): ${err?.message || err}`);
+  }
   const phoneNumberId =
     process.env.TERRY_VAPI_PHONE_NUMBER_ID?.trim() ||
     process.env.VAPI_PHONE_NUMBER_ID?.trim() ||
