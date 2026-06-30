@@ -56,3 +56,8 @@ test-results/
 # One-off agent / local scratch files
 tmp-*.txt
 
+# Local DB dumps (never commit)
+backups/
+*.dump
+database-data-only.sql
+
