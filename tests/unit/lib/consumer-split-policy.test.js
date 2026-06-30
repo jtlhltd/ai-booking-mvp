@@ -29,3 +29,17 @@ describe('routes/v1-callbot-mount', () => {
     expect(src).toMatch(/client_key_mismatch/);
   });
 });
+
+describe('Tom vertical removed from core mounts', () => {
+  test('mount-api does not mount Tom logistics CRM routers', () => {
+    const src = readFileSync(path.resolve('app/mount-api.js'), 'utf8');
+    expect(src).not.toMatch(/createFollowUpQueueRouter/);
+    expect(src).not.toMatch(/createDailySummaryRouter/);
+  });
+
+  test('mount-admin-tools does not mount Tom Vapi tools or logistics admin', () => {
+    const src = readFileSync(path.resolve('app/mount-admin-tools.js'), 'utf8');
+    expect(src).not.toMatch(/createToolsRouter/);
+    expect(src).not.toMatch(/createAdminVapiLogisticsRouter/);
+  });
+});

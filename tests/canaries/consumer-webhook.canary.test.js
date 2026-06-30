@@ -9,10 +9,16 @@ describe('consumer webhook + logistics flag canaries', () => {
     jest.resetModules();
   });
 
-  test('isLogisticsSheetWritesInCoreEnabled defaults true', async () => {
+  test('isLogisticsSheetWritesInCoreEnabled defaults false', async () => {
     delete process.env.LOGISTICS_SHEET_WRITES_IN_CORE;
     const { isLogisticsSheetWritesInCoreEnabled } = await import('../../lib/logistics-sheet-writes-in-core.js');
-    expect(isLogisticsSheetWritesInCoreEnabled('any')).toBe(true);
+    expect(isLogisticsSheetWritesInCoreEnabled('any')).toBe(false);
+  });
+
+  test('isLogisticsSheetWritesInCoreEnabled true when env 1', async () => {
+    process.env.LOGISTICS_SHEET_WRITES_IN_CORE = '1';
+    const { isLogisticsSheetWritesInCoreEnabled } = await import('../../lib/logistics-sheet-writes-in-core.js');
+    expect(isLogisticsSheetWritesInCoreEnabled('d2d-xpress-tom')).toBe(true);
   });
 
   test('isLogisticsSheetWritesInCoreEnabled false when env 0', async () => {

@@ -283,7 +283,15 @@ const rules = [
     allow: []
   },
   {
-    intentId: 'consumer.v1-api-tenant-scoped',
+    intentId: 'consumer.vertical-routes-not-on-core',
+    description: 'Call Bot must not mount Tom logistics CRM routers (follow-up queue, daily summary, tools, logistics admin).',
+    mode: 'forbid',
+    scope: 'app/',
+    filePattern: /^app\/mount-(api|admin-tools)\.js$/,
+    pattern: /createFollowUpQueueRouter|createDailySummaryRouter|createToolsRouter|createAdminVapiLogisticsRouter/,
+    allow: []
+  },
+  {
     description: 'v1 Call Bot API must use authenticateApiKey and reject clientKey mismatches.',
     mode: 'require',
     scope: 'routes/',

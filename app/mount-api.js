@@ -32,7 +32,6 @@ import { createClientDashboardDataRouter, handleClientDashboardData } from '../r
 import { createLeadTimelineRouter } from '../routes/lead-timeline.js';
 import { createCallTimeBanditRouter } from '../routes/call-time-bandit.js';
 import { createRetryQueueRouter } from '../routes/retry-queue.js';
-import { createFollowUpQueueRouter } from '../routes/follow-up-queue.js';
 import { createNextActionsRouter } from '../routes/next-actions.js';
 import { createCallRecordingsRouter } from '../routes/call-recordings.js';
 import { createVoicemailsRouter } from '../routes/voicemails.js';
@@ -45,7 +44,6 @@ import { createApiDocsRouter } from '../routes/api-docs.js';
 import { createQuickWinMetricsRouter } from '../routes/quick-win-metrics.js';
 import { createHealthAndDiagnosticsRouter } from '../routes/health-and-diagnostics.js';
 import { createOpsHealthAndDncRouter } from '../routes/ops-health-and-dnc.js';
-import { createDailySummaryRouter } from '../routes/daily-summary.js';
 import { createLeadHandoffRouter } from '../routes/lead-handoff.js';
 import { createCoreApiRouter } from '../routes/core-api.js';
 import { createClientsApiRouter } from '../routes/clients-api.js';
@@ -161,8 +159,6 @@ export function mountApi(app, deps) {
     TWILIO_FROM_NUMBER,
     TWILIO_MESSAGING_SERVICE_SID,
   } = deps;
-
-  const tomVerticalRoutesDisabled = process.env.DISABLE_TOM_VERTICAL_ROUTES === '1';
 
   app.use(
     '/api/v1',
@@ -338,9 +334,6 @@ export function mountApi(app, deps) {
       sheets,
     })
   );
-  if (!tomVerticalRoutesDisabled) {
-    app.use('/api', createFollowUpQueueRouter({ getFullClient, resolveLogisticsSpreadsheetId, sheets, query, phoneMatchKey }));
-  }
   app.use('/api', createCallsByPhoneRouter({ query, getFullClient }));
   app.use('/api', createNextActionsRouter({ query, cacheMiddleware }));
   app.use('/api', createCallRecordingsRouter({ query, formatTimeAgoLabel }));
@@ -386,20 +379,6 @@ export function mountApi(app, deps) {
       DB_PATH,
     })
   );
-  if (!tomVerticalRoutesDisabled) {
-    app.use(
-      '/api',
-      createDailySummaryRouter({
-        getFullClient,
-        resolveLogisticsSpreadsheetId,
-        sheets,
-        isPostgres,
-        poolQuerySelect,
-        query,
-        pickTimezone,
-      })
-    );
-  }
   app.use(
     '/api',
     createCoreApiRouter({

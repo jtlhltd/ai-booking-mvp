@@ -3,12 +3,9 @@ import { createAdminServerCallQueueRouter } from '../routes/admin-server-call-qu
 import { createAdminAnalyticsRouter, createAdminCostAndAccessRouter } from '../routes/admin-analytics-mount.js';
 import { createAdminClientsHealthRouter } from '../routes/admin-clients-health-mount.js';
 import { createAdminVapiCampaignsRouter } from '../routes/admin-vapi-campaigns-mount.js';
-import { createAdminVapiLogisticsRouter } from '../routes/admin-vapi-logistics-mount.js';
 import { createAdminVapiPlumbingRouter } from '../routes/admin-vapi-plumbing-mount.js';
-import { createToolsRouter } from '../routes/tools-mount.js';
 
 export function mountAdminAndTools(app, deps) {
-  const tomVerticalRoutesDisabled = process.env.DISABLE_TOM_VERTICAL_ROUTES === '1';
   const {
     // /admin tools
     createAdminTestLeadDataRouter,
@@ -184,26 +181,6 @@ export function mountAdminAndTools(app, deps) {
       TWILIO_AUTH_TOKEN,
     })
   );
-
-  if (!tomVerticalRoutesDisabled) {
-    app.use(
-      createToolsRouter({
-        store,
-        sheets,
-        sendOperatorAlert,
-        messagingService,
-        upsertLeadHandoff,
-        phoneMatchKey,
-      })
-    );
-
-    app.use(
-      createAdminVapiLogisticsRouter({
-        getApiKey,
-        runLogisticsOutreach,
-      })
-    );
-  }
 
   app.use(
     createAdminVapiCampaignsRouter({

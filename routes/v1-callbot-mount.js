@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import { authenticateApiKey } from '../middleware/security.js';
 import { handleLeadsImport } from '../lib/leads-import.js';
+import { isLogisticsSheetWritesInCoreEnabled } from '../lib/logistics-sheet-writes-in-core.js';
 
 function rejectClientKeyMismatch(req, res) {
   const bodyKey = String(req.body?.clientKey || req.body?.client_key || req.query?.clientKey || '').trim();
@@ -259,7 +260,7 @@ export function createV1CallbotRouter(deps) {
         vapi: { configured: vapiConfigured, walletGateActive },
         dnc: { activeCount: dncCountResult },
         consumerWebhook: !!(client?.consumerWebhook?.url && client?.consumerWebhook?.enabled !== false),
-        logisticsSheetInCore: process.env.LOGISTICS_SHEET_WRITES_IN_CORE !== '0',
+        logisticsSheetInCore: isLogisticsSheetWritesInCoreEnabled(req.clientKey),
         externalSheetConfigured: !!spreadsheetId,
       });
     } catch (error) {

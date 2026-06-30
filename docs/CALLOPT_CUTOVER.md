@@ -1,30 +1,25 @@
-# Tom app cutover (Call Bot split)
+# Tom app cutover (Call Bot split) — **completed**
 
-## Prerequisites
+## Architecture
 
-- Call Bot phase 1 deployed (`/api/v1`, consumer webhooks).
-- Tom app (`d2d-xpress-app`) deployed with matching `WEBHOOK_SIGNING_SECRET`.
-- Manual Google Sheet copy completed.
+- **Call Bot** (`ai-booking-mvp`): dial, queue, `/api/v1`, Vapi webhooks, `call.completed` consumer webhooks.
+- **Tom app** (`d2d-xpress-app`): sheets CRM, follow-up queue, Vapi tools (`save_logistics_data`, `schedule_callback`).
 
-## Steps
+## Production state
 
-1. **Call Bot** — set Tom tenant `consumer_webhook_json` in Postgres:
-   ```sql
-   UPDATE tenants
-   SET consumer_webhook_json = '{"url":"https://YOUR-TOM-APP.onrender.com/webhooks/callbot","secret":"YOUR_SECRET","enabled":true,"events":["call.completed"]}'::jsonb
-   WHERE client_key = 'd2d-xpress-tom';
-   ```
+- Tom tenant `consumer_webhook_json` → `https://d2d-xpress-app-f02w.onrender.com/webhooks/callbot`
+- Vapi tools → Tom app URLs
+- Call Bot: `LOGISTICS_SHEET_WRITES_IN_CORE` unset or `0` (default off in code)
+- Tom vertical routes **removed** from Call Bot mounts (not env-gated)
 
-2. **Tom app** — configure env: `CALLBOT_API_URL`, `CALLBOT_API_KEY`, `LOGISTICS_SHEET_ID`, `GOOGLE_SA_JSON_BASE64`, `WEBHOOK_SIGNING_SECRET`.
+## Rollback (emergency)
 
-3. **Vapi** — point assistant tool server URL to Tom app (`/tools/access_google_sheet`, `/tools/schedule_callback`).
+1. Render `ai-booking-mvp`: `LOGISTICS_SHEET_WRITES_IN_CORE=1`
+2. Redeploy tag `pre-tom-split-2026-06-30` if mounts must return
+3. Point Vapi tool URLs back to Call Bot `/tools/*` temporarily
 
-4. **Smoke test** — import one test lead via `POST /api/v1/leads`; confirm dial → webhook → sheet row in Tom dashboard.
+## Smoke test checklist
 
-5. **Disable core logistics writes** on Call Bot:
-   ```
-   LOGISTICS_SHEET_WRITES_IN_CORE=0
-   DISABLE_TOM_VERTICAL_ROUTES=1
-   ```
-
-6. **Rollback** — set `LOGISTICS_SHEET_WRITES_IN_CORE=1`, `DISABLE_TOM_VERTICAL_ROUTES=0`, redeploy tag `pre-tom-split-2026-06-30` if needed.
+1. Import one lead via Tom app or `POST /api/v1/leads`
+2. Complete call → sheet row in Tom app → follow-up queue on Tom dashboard
+3. Confirm Call Bot logs show consumer webhook delivery, no core sheet append
