@@ -25,7 +25,7 @@
 - [x] Trim `batch2-routes.contract.test.js` Tom sections
 - [x] Extend policy + `consumer-split-policy.test.js`
 - [x] Commit smoke script + doc updates
-- [ ] `npm run test:ci` + push
+- [x] `npm run test:ci` + push
 
 ## Risk & rollback
 
