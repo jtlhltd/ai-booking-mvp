@@ -80,14 +80,22 @@ describe('canary: dial.lead-dial-context-contained', () => {
     jest.unstable_mockModule('../../lib/outbound-sequence.js', () => ({
       getValidatedOutboundSequence: jest.fn(() => ({ enabled: true })),
       getStageById: jest.fn(() => ({ id: 'stage-1', isFinal: false })),
-      buildAssistantOverridesForStage: jest.fn(() => ({
-        variableValues: {
-          lane: 'from_sequence',
-          leadName: 'Sequence Name',
-          seqOnly: 'kept'
-        }
-      })),
       isOutboundSequenceGloballyDisabled: jest.fn(() => false)
+    }));
+    jest.unstable_mockModule('../../lib/outbound-sequence-script-llm.js', () => ({
+      resolveSequenceStageAssistantOverrides: jest.fn(async () => ({
+        overrides: {
+          variableValues: {
+            lane: 'from_sequence',
+            leadName: 'Sequence Name',
+            seqOnly: 'kept'
+          }
+        },
+        scriptSource: 'static'
+      }))
+    }));
+    jest.unstable_mockModule('../../lib/sentry.js', () => ({
+      startSpan: async (_ctx, fn) => fn()
     }));
 
     const mod = await import('../../lib/instant-calling.js');

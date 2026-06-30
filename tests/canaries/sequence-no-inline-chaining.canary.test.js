@@ -64,7 +64,8 @@ describe('canary: sequence.no-inline-stage-chaining', () => {
       updateLeadSequenceState,
       addToCallQueue,
       upsertLeadHandoff,
-      getLatestCallInsights: jest.fn(async () => ({ routing: null }))
+      getLatestCallInsights: jest.fn(async () => ({ routing: null })),
+      query: jest.fn(async () => ({ rows: [] }))
     }));
 
     jest.unstable_mockModule('../../lib/optimal-call-window.js', () => ({

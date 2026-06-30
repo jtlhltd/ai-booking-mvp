@@ -292,6 +292,7 @@ const rules = [
     allow: []
   },
   {
+    intentId: 'consumer.v1-api-tenant-scoped',
     description: 'v1 Call Bot API must use authenticateApiKey and reject clientKey mismatches.',
     mode: 'require',
     scope: 'routes/',

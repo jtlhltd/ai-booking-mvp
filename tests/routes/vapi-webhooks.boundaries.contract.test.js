@@ -83,6 +83,7 @@ jest.unstable_mockModule('../../store.js', () => ({
 }));
 
 beforeEach(() => {
+  process.env.LOGISTICS_SHEET_WRITES_IN_CORE = '1';
   query.mockReset().mockImplementation(async (sql) => {
     const s = String(sql);
     if (s.includes('INSERT INTO webhook_events')) return { rows: [{ id: 1 }] };
@@ -103,6 +104,7 @@ const CALLBACK_TRANSCRIPT = 'User: Please call back tomorrow morning, the manage
 afterEach(() => {
   delete process.env.DISABLE_CALLBACK_INBOX_EMAILS;
   delete process.env.LOGISTICS_SHEET_ID;
+  delete process.env.LOGISTICS_SHEET_WRITES_IN_CORE;
   delete process.env.CALLBACK_INBOX_EMAIL;
 });
 

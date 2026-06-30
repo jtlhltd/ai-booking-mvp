@@ -106,6 +106,7 @@ describe('lib/server-queue-workers', () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
     jest.spyOn(global.Math, 'random').mockReturnValue(0);
+    process.env.LOGISTICS_SHEET_WRITES_IN_CORE = '1';
 
     const query = jest.fn(async () => ({ rowCount: 0, rows: [] }));
     const getPendingRetries = jest.fn(async () => [
@@ -173,6 +174,7 @@ describe('lib/server-queue-workers', () => {
     expect(new Date(scheduledForIso).toISOString()).toBe('2030-01-01T00:05:00.000Z');
 
     global.Math.random.mockRestore();
+    delete process.env.LOGISTICS_SHEET_WRITES_IN_CORE;
     jest.useRealTimers();
   });
 

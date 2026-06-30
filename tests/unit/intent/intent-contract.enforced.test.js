@@ -25,7 +25,12 @@ function extractIntentIdsFromIntentMd(md) {
   const out = new Set();
   const re = /`([a-z][a-z0-9-]*\.[a-z0-9-]+)`/g;
   let m;
-  while ((m = re.exec(md))) out.add(m[1]);
+  while ((m = re.exec(md))) {
+    const id = m[1];
+    // Skip false positives from backticked file paths like `app/mount-admin-tools.js`.
+    if (/\.(js|mjs|cjs|ts|json|md)$/.test(id)) continue;
+    out.add(id);
+  }
   return [...out].sort();
 }
 

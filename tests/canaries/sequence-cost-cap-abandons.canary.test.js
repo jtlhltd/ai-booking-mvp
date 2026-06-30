@@ -57,7 +57,8 @@ describe('canary: sequence.bounded-total-dials-per-lead', () => {
       updateLeadSequenceState,
       addToCallQueue,
       upsertLeadHandoff,
-      getLatestCallInsights: jest.fn(async () => ({ routing: null }))
+      getLatestCallInsights: jest.fn(async () => ({ routing: null })),
+      query: jest.fn(async () => ({ rows: [] }))
     }));
 
     jest.unstable_mockModule('../../lib/optimal-call-window.js', () => ({

@@ -3,7 +3,10 @@ import {
   categorizeError,
   shouldRetryError,
   calculateRetryDelay,
-  generateCostRecommendations
+  generateCostRecommendations,
+  updateCircuitBreakerState,
+  isCircuitBreakerOpen,
+  retryWithBackoff
 } from '../../../lib/server-call-resilience.js';
 
 describe('lib/server-call-resilience', () => {
@@ -45,5 +48,27 @@ describe('lib/server-call-resilience', () => {
     );
     expect(rec.length).toBeGreaterThan(0);
     expect(rec.some((r) => r.type === 'cost_optimization')).toBe(true);
+  });
+
+  test('circuit breaker opens and recovers to half-open after timeout', async () => {
+    jest.useFakeTimers();
+    await updateCircuitBreakerState('canary-op', 'open');
+    expect(isCircuitBreakerOpen('canary-op')).toBe(true);
+    jest.advanceTimersByTime(5 * 60 * 1000 + 1);
+    expect(isCircuitBreakerOpen('canary-op')).toBe(false);
+    jest.useRealTimers();
+  });
+
+  test('retryWithBackoff succeeds on first attempt', async () => {
+    const fn = jest.fn(async () => 'ok');
+    await expect(retryWithBackoff(fn, 3, 100, { operation: 'canary-retry' })).resolves.toBe('ok');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  test('retryWithBackoff rejects when circuit breaker is open', async () => {
+    await updateCircuitBreakerState('blocked-canary', 'open');
+    await expect(
+      retryWithBackoff(async () => 'x', 3, 100, { operation: 'blocked-canary' })
+    ).rejects.toThrow(/Circuit breaker is open/);
   });
 });
