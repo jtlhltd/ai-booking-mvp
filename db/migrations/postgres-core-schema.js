@@ -736,6 +736,12 @@ export async function ensurePostgresCoreSchema(pool) {
       ) THEN
         ALTER TABLE tenants ADD COLUMN outbound_sequence_json JSONB;
       END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'tenants' AND column_name = 'consumer_webhook_json'
+      ) THEN
+        ALTER TABLE tenants ADD COLUMN consumer_webhook_json JSONB;
+      END IF;
     END $$;
 
     CREATE TABLE IF NOT EXISTS lead_sequence_state (

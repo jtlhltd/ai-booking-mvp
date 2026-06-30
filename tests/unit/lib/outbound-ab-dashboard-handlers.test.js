@@ -17,8 +17,8 @@ describe('lib/outbound-ab-dashboard-handlers', () => {
     else process.env.DASHBOARD_SELF_SERVICE_CLIENT_KEYS = prevEnv;
   });
 
-  test('getDashboardSelfServiceClientKeys defaults when env unset', () => {
-    expect(getDashboardSelfServiceClientKeys()).toContain('d2d-xpress-tom');
+  test('getDashboardSelfServiceClientKeys defaults empty when env unset', () => {
+    expect(getDashboardSelfServiceClientKeys()).toEqual([]);
   });
 
   test('getDashboardSelfServiceClientKeys parses comma list', () => {
@@ -32,8 +32,8 @@ describe('lib/outbound-ab-dashboard-handlers', () => {
     expect(isDashboardSelfServiceClient('z')).toBe(false);
   });
 
-  test('isDashboardSelfServiceClient accepts Tom URL spelling when default allow-list is d2d only', () => {
-    delete process.env.DASHBOARD_SELF_SERVICE_CLIENT_KEYS;
+  test('isDashboardSelfServiceClient accepts Tom URL spelling when env lists d2d only', () => {
+    process.env.DASHBOARD_SELF_SERVICE_CLIENT_KEYS = 'd2d-xpress-tom';
     expect(isDashboardSelfServiceClient('u2d-xpress-tom')).toBe(true);
     expect(isDashboardSelfServiceClient('d2d-xpress-tom')).toBe(true);
   });

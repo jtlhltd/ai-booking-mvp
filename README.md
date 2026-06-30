@@ -1,6 +1,8 @@
-# AI Booking MVP - Automated Appointment Booking System
+# AI Booking MVP - Call Bot Platform
 
-**Production-ready SaaS platform for AI-powered appointment booking via phone calls**
+**Multi-tenant AI outbound calling engine** (dial, queue, Vapi, sequences, handoff) with optional appointment-booking features.
+
+Client-specific operator apps (e.g. [D2D Xpress logistics CRM](../d2d-xpress-app)) consume the **Call Bot API** at `/api/v1` and signed `call.completed` webhooks.
 
 ---
 

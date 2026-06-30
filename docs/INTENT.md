@@ -77,6 +77,16 @@ must always 403, never silently 200.
 | `tenant.cross-tenant-isolation` | Authenticated requests with a `clientKey` the caller does not own must return 403, never silent 200. | `routes/**` admin/client surfaces | canary (uses `assertTenantIsolation`) | Authenticate as tenant A, request tenant B's resources; response must be 401/403. |
 | `tenant.auth-required-on-admin` | Admin/client endpoints must return 401 when `X-API-Key` is missing or invalid. | `routes/admin-*.js`, `routes/client-*.js` | canary (uses `assertAuthRequired`) | Send a request without `X-API-Key`; response must be 401 with a JSON error envelope. |
 
+## Domain: consumer
+
+External client apps (e.g. Tom logistics CRM) consume Call Bot via `/api/v1` and signed `call.completed` webhooks. Payloads must not leak internal tenant keys.
+
+| ID | Statement | Constrains | Enforced by | Manual disprove |
+| --- | --- | --- | --- | --- |
+| `consumer.call-completed-webhook` | After a successful end-of-call handoff path, the platform MUST schedule at most one `call.completed` delivery per call when `tenants.consumer_webhook_json` is enabled (`url`, `secret`, `enabled`). Payload uses `displayName` only — never `client_key`. Signing: `X-CallBot-Timestamp` + `X-CallBot-Signature: sha256=…` over `{timestamp}.{body}`. Failed deliveries enqueue `consumer_call_completed` retry rows. | `lib/consumer-webhook-emitter.js`, `lib/vapi-webhooks/process-webhook-payload.js`, `lib/vapi-webhooks/outbound-sequence-webhook.js` | canary, unit | With consumer webhook configured, EOCR triggers exactly one emitter schedule; envelope `tenant` has no `client_key`. |
+| `consumer.no-logistics-sheet-when-disabled` | When `LOGISTICS_SHEET_WRITES_IN_CORE=0`, core MUST NOT append/update logistics Google Sheets on EOCR and MUST skip `sheet_patch` retry processing. Consumer webhooks and dial queue behavior are unchanged. | `lib/vapi-webhooks/process-webhook-payload.js`, `lib/server-queue-workers.js#processSheetPatchRetry`, `lib/logistics-sheet-writes-in-core.js` | canary, unit | Set env `LOGISTICS_SHEET_WRITES_IN_CORE=0`; EOCR must not call `appendLogistics` / `updateLogisticsRowByPhone`; `processSheetPatchRetry` returns without sheet I/O. |
+| `consumer.v1-api-tenant-scoped` | All `/api/v1/*` routes MUST authenticate via per-tenant `api_keys` and MUST reject body/query `clientKey` that mismatches the key's tenant. | `routes/v1-callbot-mount.js` | policy, contract | POST `/api/v1/leads` with mismatched `clientKey` returns 403. |
+
 ## Domain: billing
 
 Spend on Vapi credits is bounded by a small set of measurable behaviors:

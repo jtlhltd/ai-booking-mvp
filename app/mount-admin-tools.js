@@ -8,6 +8,7 @@ import { createAdminVapiPlumbingRouter } from '../routes/admin-vapi-plumbing-mou
 import { createToolsRouter } from '../routes/tools-mount.js';
 
 export function mountAdminAndTools(app, deps) {
+  const tomVerticalRoutesDisabled = process.env.DISABLE_TOM_VERTICAL_ROUTES === '1';
   const {
     // /admin tools
     createAdminTestLeadDataRouter,
@@ -184,16 +185,25 @@ export function mountAdminAndTools(app, deps) {
     })
   );
 
-  app.use(
-    createToolsRouter({
-      store,
-      sheets,
-      sendOperatorAlert,
-      messagingService,
-      upsertLeadHandoff,
-      phoneMatchKey,
-    })
-  );
+  if (!tomVerticalRoutesDisabled) {
+    app.use(
+      createToolsRouter({
+        store,
+        sheets,
+        sendOperatorAlert,
+        messagingService,
+        upsertLeadHandoff,
+        phoneMatchKey,
+      })
+    );
+
+    app.use(
+      createAdminVapiLogisticsRouter({
+        getApiKey,
+        runLogisticsOutreach,
+      })
+    );
+  }
 
   app.use(
     createAdminVapiCampaignsRouter({
@@ -205,13 +215,6 @@ export function mountAdminAndTools(app, deps) {
       generateDemoConfirmationEmail,
       generateObjectionHandlingEmail,
       generatePersonalizedScript,
-    })
-  );
-
-  app.use(
-    createAdminVapiLogisticsRouter({
-      getApiKey,
-      runLogisticsOutreach,
     })
   );
 

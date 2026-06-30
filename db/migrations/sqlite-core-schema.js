@@ -121,6 +121,10 @@ export function ensureSqliteCoreSchema(sqlite) {
     if (!hasSeq) {
       sqlite.exec(`ALTER TABLE tenants ADD COLUMN outbound_sequence_json TEXT`);
     }
+    const hasConsumerWebhook = cols.some((c) => c.name === 'consumer_webhook_json');
+    if (!hasConsumerWebhook) {
+      sqlite.exec(`ALTER TABLE tenants ADD COLUMN consumer_webhook_json TEXT`);
+    }
   } catch (e) {
     console.warn('[sqlite] tenants.outbound_sequence_json migration:', e?.message || e);
   }

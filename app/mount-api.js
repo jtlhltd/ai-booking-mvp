@@ -53,6 +53,7 @@ import { createCalendarApiRouter } from '../routes/calendar-api.js';
 import { createClientOpsRouter } from '../routes/client-ops-mount.js';
 import { createOutboundSequenceVisibilityRouter } from '../routes/outbound-sequence-visibility-mount.js';
 import { createCallsByPhoneRouter } from '../routes/calls-by-phone-mount.js';
+import { createV1CallbotRouter } from '../routes/v1-callbot-mount.js';
 
 export function mountApi(app, deps) {
   const {
@@ -160,6 +161,35 @@ export function mountApi(app, deps) {
     TWILIO_FROM_NUMBER,
     TWILIO_MESSAGING_SERVICE_SID,
   } = deps;
+
+  const tomVerticalRoutesDisabled = process.env.DISABLE_TOM_VERTICAL_ROUTES === '1';
+
+  app.use(
+    '/api/v1',
+    createV1CallbotRouter({
+      query,
+      getFullClient,
+      isBusinessHours,
+      getNextBusinessHour,
+      scheduleAtOptimalCallWindow,
+      addToCallQueue,
+      validateAndSanitizePhone,
+      phoneMatchKey,
+      sanitizeInput,
+      isOptedOut,
+      sendOperatorAlert,
+      sanitizeLead,
+      runOutboundCallsForImportedLeads,
+      TIMEZONE,
+      upsertImportedLead,
+      listLeadHandoff: deps.listLeadHandoff,
+      getLeadHandoffByPhone: deps.getLeadHandoffByPhone,
+      listOptOutList: deps.listOptOutList,
+      dbType,
+      DB_PATH,
+      resolveLogisticsSpreadsheetId,
+    })
+  );
 
   app.use(
     createClientOpsRouter({
@@ -308,7 +338,9 @@ export function mountApi(app, deps) {
       sheets,
     })
   );
-  app.use('/api', createFollowUpQueueRouter({ getFullClient, resolveLogisticsSpreadsheetId, sheets, query, phoneMatchKey }));
+  if (!tomVerticalRoutesDisabled) {
+    app.use('/api', createFollowUpQueueRouter({ getFullClient, resolveLogisticsSpreadsheetId, sheets, query, phoneMatchKey }));
+  }
   app.use('/api', createCallsByPhoneRouter({ query, getFullClient }));
   app.use('/api', createNextActionsRouter({ query, cacheMiddleware }));
   app.use('/api', createCallRecordingsRouter({ query, formatTimeAgoLabel }));
@@ -354,18 +386,20 @@ export function mountApi(app, deps) {
       DB_PATH,
     })
   );
-  app.use(
-    '/api',
-    createDailySummaryRouter({
-      getFullClient,
-      resolveLogisticsSpreadsheetId,
-      sheets,
-      isPostgres,
-      poolQuerySelect,
-      query,
-      pickTimezone,
-    })
-  );
+  if (!tomVerticalRoutesDisabled) {
+    app.use(
+      '/api',
+      createDailySummaryRouter({
+        getFullClient,
+        resolveLogisticsSpreadsheetId,
+        sheets,
+        isPostgres,
+        poolQuerySelect,
+        query,
+        pickTimezone,
+      })
+    );
+  }
   app.use(
     '/api',
     createCoreApiRouter({

@@ -42,6 +42,28 @@ Rate limit headers are included in all responses:
 
 ---
 
+## Call Bot API v1 (external consumers)
+
+Authenticated per-tenant API for client apps (e.g. logistics CRM). Base path: `/api/v1`.
+
+**Auth:** `Authorization: Bearer <api_key>` (tenant-scoped key from `api_keys` table).
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/v1/leads` | Import leads (same body as `/api/leads/import`) |
+| POST | `/api/v1/leads/:phone/dial` | Enqueue recall dial |
+| GET | `/api/v1/calls/:callId` | Call status |
+| GET | `/api/v1/calls/:callId/transcript` | Transcript |
+| GET | `/api/v1/handoffs` | List handoff rows |
+| GET | `/api/v1/handoffs/:phone` | Handoff for phone |
+| GET | `/api/v1/health` | Tenant ops health |
+
+**Consumer webhooks:** configure `tenants.consumer_webhook_json` with `{ url, secret, enabled, events: ["call.completed"] }`. Events are HMAC-signed (`X-CallBot-Timestamp`, `X-CallBot-Signature`).
+
+See [CALLOPT_CUTOVER.md](CALLOPT_CUTOVER.md) and [d2d-xpress-app](../d2d-xpress-app) for Tom's operator app.
+
+---
+
 ## Core Endpoints
 
 ### Leads

@@ -244,6 +244,7 @@ const rules = [
       'lib/ops-invariants.js',
       'lib/query-performance-tracker.js',
       'scripts/check-policy.mjs',
+      'scripts/pause-tenant-outbound.mjs',
       'tests/'
     ]
   },
@@ -279,6 +280,33 @@ const rules = [
     requireAny: [
       /(?=.*\bimport\s*\{[^}]*\bcategorizeError\b[^}]*\}\s*from\s*['"]\.\/server-call-resilience\.js['"])(?=.*\bimport\s*\{[^}]*\bselectOptimalAssistant\b[^}]*\}\s*from\s*['"]\.\/server-assistant-scheduling\.js['"])(?=.*\bimport\s*\{[^}]*\bresolveLogisticsSpreadsheetId\b[^}]*\}\s*from\s*['"]\.\/dashboard-ui-formatters\.js['"])(?=.*\bimport\s*\{[^}]*\bpatchLogisticsRowByNumber\b[^}]*\}\s*from\s*['"]\.\.\/sheets\.js['"])/s
     ],
+    allow: []
+  },
+  {
+    intentId: 'consumer.v1-api-tenant-scoped',
+    description: 'v1 Call Bot API must use authenticateApiKey and reject clientKey mismatches.',
+    mode: 'require',
+    scope: 'routes/',
+    filePattern: /^routes\/v1-callbot-mount\.js$/,
+    requireAny: [/authenticateApiKey/, /client_key_mismatch/],
+    allow: []
+  },
+  {
+    intentId: 'consumer.no-logistics-sheet-when-disabled',
+    description: 'Queue sheet_patch retries must respect LOGISTICS_SHEET_WRITES_IN_CORE.',
+    mode: 'require',
+    scope: 'lib/',
+    filePattern: /^lib\/server-queue-workers\.js$/,
+    requireAny: [/isLogisticsSheetWritesInCoreEnabled/, /processSheetPatchRetry/],
+    allow: []
+  },
+  {
+    intentId: 'consumer.call-completed-webhook',
+    description: 'Vapi EOCR path must schedule consumer call.completed webhooks.',
+    mode: 'require',
+    scope: 'lib/vapi-webhooks/',
+    filePattern: /^lib\/vapi-webhooks\/process-webhook-payload\.js$/,
+    requireAny: [/scheduleConsumerCallCompletedWebhook/],
     allow: []
   }
 ];

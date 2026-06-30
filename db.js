@@ -390,6 +390,7 @@ function mapTenantRow(r) {
   const smsTemplates = toJson(r.sms_templates_json) || {};
   const whiteLabel = toJson(r.white_label_config) || {};
   const outboundSequence = toJson(r.outbound_sequence_json);
+  const consumerWebhook = toJson(r.consumer_webhook_json);
 
   const out = {
     clientKey: r.client_key,
@@ -404,6 +405,7 @@ function mapTenantRow(r) {
     smsTemplates,
     whiteLabel,
     outboundSequence: outboundSequence && typeof outboundSequence === 'object' ? outboundSequence : null,
+    consumerWebhook: consumerWebhook && typeof consumerWebhook === 'object' ? consumerWebhook : null,
     isEnabled: r.is_enabled === true || r.is_enabled === 1,
     createdAt: r.created_at
   };
@@ -543,7 +545,7 @@ export async function getFullClient(clientKey, options = {}) {
       `
     SELECT client_key, display_name, timezone, locale,
            numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, 
-           white_label_config, outbound_sequence_json, is_enabled, created_at
+           white_label_config, outbound_sequence_json, consumer_webhook_json, is_enabled, created_at
     FROM tenants WHERE client_key = $1
   `,
       [ck]
