@@ -31,7 +31,7 @@ export default {
       // from this merge (often *lowering* the global % if you peel off small, near-100% modules). Max safe floors here
       // are set from `jest --coverage` threshold errors, not only the printed summary table.
       // Bumped after test-suite-overhaul Phase 3-4 (added contract tests for receptionist, core-api,
-      // tools-mount, outreach, leads/portal mounts, vapi-webhooks boundaries, plus the coverage-boost-3
+      // outreach, leads/portal mounts, vapi-webhooks boundaries, plus the coverage-boost-3
       // batch). Path gates below peel several near-100% routes off this merge, so the *global* numbers
       // here are lower than the printed summary table. Branch floor lowered slightly after extracting
       // vapi-webhooks + shared queue helpers (coverage merge shifts).
@@ -194,12 +194,6 @@ export default {
       functions: 95,
       lines: 90,
       statements: 90
-    },
-    './routes/tools-mount.js': {
-      branches: 70,
-      functions: 55,
-      lines: 95,
-      statements: 95
     },
     './routes/leads-portal-mount.js': {
       branches: 75,

@@ -77,8 +77,6 @@ export function mountAdminAndTools(app, deps) {
     generateObjectionHandlingEmail,
     generatePersonalizedScript,
 
-    runLogisticsOutreach,
-
     TIMEZONE,
     isBusinessHoursForTenant,
 

@@ -53,60 +53,6 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
     });
   });
 
-  describe('routes/daily-summary.js', () => {
-    test('happy: demo client returns demo summary without sheets', async () => {
-      const { createDailySummaryRouter } = await import('../../routes/daily-summary.js');
-      const app = createContractApp({
-        mounts: [
-          {
-            path: '/',
-            router: () =>
-              createDailySummaryRouter({
-                getFullClient: async () => ({}),
-                resolveLogisticsSpreadsheetId: () => null,
-                sheets: {},
-                isPostgres: false,
-                poolQuerySelect: async () => ({ rows: [{ n: 0 }] }),
-                query: async () => ({ rows: [{ n: 0 }] }),
-                pickTimezone: () => 'Europe/London'
-              })
-          }
-        ]
-      });
-      const res = await request(app).get('/daily-summary/demo_client').expect(200);
-      expect(res.body).toEqual(expect.objectContaining({ ok: true, demo: true }));
-    });
-
-    test('failure: returns 502 when sheets read throws for configured client', async () => {
-      const sheets = {
-        ensureLogisticsHeader: jest.fn(async () => {}),
-        readSheet: jest.fn(async () => {
-          throw new Error('sheet down');
-        }),
-        logisticsSheetRowsToRecords: () => []
-      };
-      const { createDailySummaryRouter } = await import('../../routes/daily-summary.js');
-      const app = createContractApp({
-        mounts: [
-          {
-            path: '/',
-            router: () =>
-              createDailySummaryRouter({
-                getFullClient: async () => ({ clientKey: 'c1' }),
-                resolveLogisticsSpreadsheetId: () => 'sheet_1',
-                sheets,
-                isPostgres: false,
-                poolQuerySelect: async () => ({ rows: [{ n: 0 }] }),
-                query: async () => ({ rows: [{ n: 0 }] }),
-                pickTimezone: () => 'Europe/London'
-              })
-          }
-        ]
-      });
-      await request(app).get('/daily-summary/c1').expect(502);
-    });
-  });
-
   describe('routes/ops-health-and-dnc.js', () => {
     test('happy: GET /ops/health/:clientKey returns ok true', async () => {
       const { createOpsHealthAndDncRouter } = await import('../../routes/ops-health-and-dnc.js');
@@ -330,25 +276,6 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
         mounts: [{ path: '/', router: () => createNextActionsRouter({ query, cacheMiddleware: () => (_req, _res, next) => next() }) }]
       });
       await request(app).get('/next-actions/c1').expect(500);
-    });
-  });
-
-  describe('routes/follow-up-queue.js', () => {
-    test('happy: demo client returns demo rows', async () => {
-      const { createFollowUpQueueRouter } = await import('../../routes/follow-up-queue.js');
-      const app = createContractApp({
-        mounts: [{ path: '/', router: () => createFollowUpQueueRouter({ getFullClient: async () => ({}), resolveLogisticsSpreadsheetId: () => null, sheets: {} }) }]
-      });
-      const res = await request(app).get('/follow-up-queue/demo_client').expect(200);
-      expect(res.body).toEqual(expect.objectContaining({ ok: true, demo: true, rows: expect.any(Array) }));
-    });
-
-    test('failure: status endpoint rejects invalid row', async () => {
-      const { createFollowUpQueueRouter } = await import('../../routes/follow-up-queue.js');
-      const app = createContractApp({
-        mounts: [{ path: '/', router: () => createFollowUpQueueRouter({ getFullClient: async () => ({}), resolveLogisticsSpreadsheetId: () => 'sheet', sheets: {} }) }]
-      });
-      await request(app).post('/follow-up-queue/c1/status').send({ row: 1 }).expect(400);
     });
   });
 

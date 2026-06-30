@@ -292,6 +292,15 @@ const rules = [
     allow: []
   },
   {
+    intentId: 'consumer.vertical-routes-not-on-core',
+    description: 'Tom vertical route modules must not exist on Call Bot core (consumer apps own them).',
+    mode: 'forbid',
+    scope: 'routes/',
+    filePattern: /^routes\/(follow-up-queue|daily-summary|tools-mount|admin-vapi-logistics-mount)\.js$/,
+    pattern: /./,
+    allow: []
+  },
+  {
     intentId: 'consumer.v1-api-tenant-scoped',
     description: 'v1 Call Bot API must use authenticateApiKey and reject clientKey mismatches.',
     mode: 'require',
@@ -426,7 +435,9 @@ function scanFile(absPath, relPath, rule) {
     };
   }
 
-  // Default forbid-mode: a match in the file is a violation.
+  // Default forbid-mode: optional filePattern limits which files are checked;
+  // a pattern match in the file body is a violation.
+  if (rule.filePattern && !rule.filePattern.test(relPath)) return null;
   if (!rule.pattern) return null;
   const m = text.match(rule.pattern);
   if (!m) return null;

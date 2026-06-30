@@ -286,7 +286,7 @@ import {
   isDashboardSelfServiceClient,
   isVapiOutboundAbExperimentOnlyPatch,
 } from './lib/outbound-ab-dashboard-handlers.js';
-import { runLogisticsOutreach, startColdCallCampaign } from './lib/campaign-vapi-dial-helpers.js';
+import { startColdCallCampaign } from './lib/campaign-vapi-dial-helpers.js';
 import {
   getOptimalCallTime,
   generateFollowUpPlan,
@@ -1073,8 +1073,6 @@ mountAdminAndTools(
     generateObjectionHandlingEmail,
     generatePersonalizedScript,
 
-    runLogisticsOutreach,
-
     TIMEZONE,
     isBusinessHoursForTenant,
 
@@ -1163,7 +1161,8 @@ registerMainHttpRoutes.leadsFollowups(app, {
 // Start processors with cron jobs (better than setInterval for production)
 // These will be scheduled in the cron section below
 
-// moved: /admin/vapi/cold-call-assistant and /tools/* → routes/admin-vapi-campaigns-mount.js and routes/tools-mount.js
+// moved: /admin/vapi/cold-call-assistant → routes/admin-vapi-campaigns-mount.js
+// Tom /tools/* and logistics admin live on d2d-xpress-app (consumer app)
 
 // moved: outbound A/B + review endpoints → routes/client-ops-mount.js
 

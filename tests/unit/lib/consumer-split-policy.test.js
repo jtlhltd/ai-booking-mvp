@@ -1,5 +1,5 @@
 import { describe, test, expect } from '@jest/globals';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 
 describe('lib/logistics-sheet-writes-in-core', () => {
@@ -42,4 +42,19 @@ describe('Tom vertical removed from core mounts', () => {
     expect(src).not.toMatch(/createToolsRouter/);
     expect(src).not.toMatch(/createAdminVapiLogisticsRouter/);
   });
+});
+
+describe('Tom vertical route modules removed from core', () => {
+  const removed = [
+    'routes/follow-up-queue.js',
+    'routes/daily-summary.js',
+    'routes/tools-mount.js',
+    'routes/admin-vapi-logistics-mount.js',
+  ];
+
+  for (const rel of removed) {
+    test(`${rel} is not present on Call Bot`, () => {
+      expect(existsSync(path.resolve(rel))).toBe(false);
+    });
+  }
 });

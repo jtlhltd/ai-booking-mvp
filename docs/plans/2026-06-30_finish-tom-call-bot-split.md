@@ -28,11 +28,12 @@
 - [x] Update `.env.example`, `CALLOPT_CUTOVER.md`, README
 - [x] INTENT + `check-policy.mjs` + canaries
 - [x] Fix tests referencing removed routes
-- [ ] Run `npm run test:ci`
+- [x] Run `npm run test:ci`
 
 ## Amendments
 
 - 2026-06-30: Split finished — vertical mounts deleted (not env-gated); logistics writes default off; Render env flipped.
+- 2026-06-30: Deleted Tom vertical route modules from Call Bot; smoke script + policy file gate added.
 
 ## Risk & rollback
 

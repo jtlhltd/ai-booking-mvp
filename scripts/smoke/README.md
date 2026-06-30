@@ -31,3 +31,11 @@ scripts should land here.
 ```bash
 SMOKE=1 node scripts/smoke/<name>.mjs
 ```
+
+### `tom-cutover-smoke.mjs`
+
+Signed `call.completed` POST to the Tom app (uses prod `DATABASE_URL` for webhook secret). Verifies auth + sheet append path.
+
+```bash
+SMOKE=1 node scripts/smoke/tom-cutover-smoke.mjs
+```
