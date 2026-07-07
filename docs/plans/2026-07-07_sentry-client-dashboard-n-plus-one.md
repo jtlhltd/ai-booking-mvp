@@ -24,10 +24,10 @@
 ## Work breakdown
 
 - [x] Confirm Sentry issue details and skip/dedupe conditions.
-- [ ] Add a per-request dashboard query runner using `pool.connect()` for PG and safe release in `finally`.
-- [ ] Wire deployed route dependencies to pass the PG pool if not already present.
-- [ ] Add focused contract test for single checkout/release and unchanged response success.
-- [ ] Run focused test, then `npm run test:unit`, then `npm run test:integration-lite`.
+- [x] Add a per-request dashboard query runner using `pool.connect()` for PG and safe release in `finally`.
+- [x] Wire deployed route dependencies to pass the PG pool if not already present.
+- [x] Add focused contract test for single checkout/release and unchanged response success.
+- [x] Run focused test, then `npm run test:unit`, then `npm run test:integration-lite`.
 - [ ] Commit and push branch, open PR, mark ready.
 - [ ] Wait for CI `test` and `test-windows`, merge GREEN PR, verify Render deploy and service health/culprit route, then resolve Sentry and send Slack completion.
 
