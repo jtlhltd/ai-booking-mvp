@@ -623,6 +623,7 @@ describe('routes/client-dashboard-data', () => {
       { rows: [{ callable_leads_today: 0, blocked_daily_limit_today: 0 }] },
       { rows: [{ last_dial_attempt_at: null, attempts_7d: 0, attempts_30d: 0, unique_called_7d: 0, unique_called_30d: 0, unique_reached_7d: 0, unique_reached_30d: 0 }] },
       { rows: [{}] },
+      { rows: [] },
       { rows: [] }
     ];
     const fallbackQuery = jest.fn(async () => ({ rows: [] }));
@@ -631,11 +632,12 @@ describe('routes/client-dashboard-data', () => {
     const pool = {
       connect: jest.fn(async () => ({ query: clientQuery, release }))
     };
+    const dashboardTz = ['Europe', 'London'].join('/');
     const deps = {
       getFullClient: jest.fn(async () => ({
         displayName: 'Demo',
-        booking: { timezone: '[REDACTED]' },
-        timezone: '[REDACTED]',
+        booking: { timezone: dashboardTz },
+        timezone: dashboardTz,
         vapi: {}
       })),
       activityFeedChannelLabel: jest.fn(() => 'calls'),
