@@ -459,6 +459,7 @@ mountApi(
     getClientFromHeader,
     isDashboardSelfServiceClient,
     query,
+    pool,
     poolQuerySelect,
     cacheMiddleware,
     dashboardStatsCache,
