@@ -65,6 +65,7 @@ export function mountApi(app, deps) {
     // db + caching
     query,
     pool,
+    getPool,
     poolQuerySelect,
     cacheMiddleware,
     dashboardStatsCache,
@@ -294,6 +295,7 @@ export function mountApi(app, deps) {
           isPostgres,
           query,
           pool,
+          getPool,
           sqlDaysAgo,
           formatTimeAgoLabel,
           formatCallDuration,
