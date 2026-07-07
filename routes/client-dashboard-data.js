@@ -22,11 +22,15 @@ function applyDeprecatedClientDashboardHeaders(res, clientKey) {
 }
 
 async function withClientDashboardQueryRunner(deps, fn) {
-  if (!deps?.isPostgres || typeof deps?.pool?.connect !== 'function') { // pragma: allowlist secret
+  const livePool =
+    deps?.pool && typeof deps.pool.connect === 'function'
+      ? deps.pool
+      : (typeof deps?.getPool === 'function' ? deps.getPool() : null);
+  if (!deps?.isPostgres || typeof livePool?.connect !== 'function') { // pragma: allowlist secret
     return await fn(deps?.query);
   }
 
-  const client = await deps.pool.connect();
+  const client = await livePool.connect();
   const queryWithRequestClient = (text, params = []) => client.query(text, params);
   try {
     return await fn(queryWithRequestClient);

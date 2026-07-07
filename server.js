@@ -460,6 +460,7 @@ mountApi(
     isDashboardSelfServiceClient,
     query,
     pool,
+    getPool: () => pool,
     poolQuerySelect,
     cacheMiddleware,
     dashboardStatsCache,
