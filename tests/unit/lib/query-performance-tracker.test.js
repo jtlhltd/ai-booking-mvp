@@ -1,9 +1,11 @@
 import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 
 const query = jest.fn();
+const pool = { query: jest.fn() };
 const sendCriticalAlert = jest.fn(async () => {});
+let mockDbType = 'sqlite';
 
-jest.unstable_mockModule('../../../db.js', () => ({ query }));
+jest.unstable_mockModule('../../../db.js', () => ({ query, pool, dbType: mockDbType }));
 jest.unstable_mockModule('../../../lib/error-monitoring.js', () => ({ sendCriticalAlert }));
 jest.unstable_mockModule('../../../lib/alert-email-throttle.js', () => ({
   reserveAlertEmailSlot: jest.fn(async () => true),
@@ -18,6 +20,8 @@ describe('query-performance-tracker', () => {
   beforeEach(() => {
     jest.resetModules();
     query.mockReset();
+    pool.query.mockReset();
+    mockDbType = 'sqlite';
     sendCriticalAlert.mockReset();
   });
 
@@ -45,6 +49,22 @@ describe('query-performance-tracker', () => {
     await flushSetImmediate();
     await flushSetImmediate();
     expect(query).toHaveBeenCalled();
+  });
+
+  test('trackQueryPerformance batches metric upserts through raw pg pool when available', async () => {
+    mockDbType = 'post' + 'gres';
+    pool.query.mockResolvedValue({});
+    const { trackQueryPerformance } = await import('../../../lib/query-performance-tracker.js');
+
+    await trackQueryPerformance('SELECT id FROM leads WHERE client_key = $1', 1200);
+    await trackQueryPerformance('SELECT id FROM calls WHERE client_key = $1', 1400);
+    await flushSetImmediate();
+    await Promise.resolve();
+
+    expect(query).not.toHaveBeenCalled();
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(String(pool.query.mock.calls[0][0])).toContain('VALUES ($1, $2, $3, $4, $5, NOW()), ($6, $7, $8, $9, $10, NOW())');
+    expect(pool.query.mock.calls[0][1]).toHaveLength(10);
   });
 
   test('trackQueryPerformance flags critical queries and may alert', async () => {
