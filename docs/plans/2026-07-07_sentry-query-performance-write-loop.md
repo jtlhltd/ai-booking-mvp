@@ -25,9 +25,9 @@
 ## Work breakdown
 
 - [x] Confirm real Sentry issue details and skip/dedupe conditions.
-- [ ] Add an untracked query path for query performance metric upserts.
-- [ ] Update query performance tracker tests for the untracked metric write path and fallback behavior.
-- [ ] Run focused tests, then `npm run test:unit`, then `npm run test:integration-lite`.
+- [x] Add an untracked batched query path for query performance metric upserts.
+- [x] Update query performance tracker tests for the untracked metric write path and fallback behavior.
+- [x] Run focused tests, then `npm run test:unit`, then `npm run test:integration-lite`.
 - [ ] Commit and push branch, open PR, mark ready.
 - [ ] Wait for CI `test` and `test-windows`, merge GREEN PR, verify Render deploy and service health/culprit route, then resolve Sentry and send Slack completion.
 
