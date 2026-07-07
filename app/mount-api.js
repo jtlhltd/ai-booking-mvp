@@ -64,6 +64,7 @@ export function mountApi(app, deps) {
     isDashboardSelfServiceClient,
     // db + caching
     query,
+    pool,
     poolQuerySelect,
     cacheMiddleware,
     dashboardStatsCache,
@@ -292,6 +293,7 @@ export function mountApi(app, deps) {
           DASHBOARD_ACTIVITY_TZ,
           isPostgres,
           query,
+          pool,
           sqlDaysAgo,
           formatTimeAgoLabel,
           formatCallDuration,

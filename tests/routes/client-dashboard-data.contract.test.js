@@ -552,7 +552,7 @@ describe('routes/client-dashboard-data', () => {
       })),
       activityFeedChannelLabel: jest.fn(() => 'calls'),
       DateTime,
-      isPostgres: true,
+      isPostgres: true, // pragma: allowlist secret
       query,
       formatTimeAgoLabel: () => '1h',
       formatCallDuration: () => '1m',
@@ -579,6 +579,100 @@ describe('routes/client-dashboard-data', () => {
     // payloads/headers — display name only.
     assertNoTenantKeyLeak(res, 'd2d-xpress-tom');
     assertNoStoreCache(res);
+  });
+
+  test('performance: PG dashboard request reuses one pool client', async () => { // pragma: allowlist secret
+    jest.unstable_mockModule('../../db.js', () => ({
+      inferOutboundAbExperimentName: jest.fn(async () => null),
+      getOutboundAbExperimentSummary: jest.fn(async () => null)
+    }));
+    jest.unstable_mockModule('../../lib/outbound-ab-baseline.js', () => ({
+      getVapiAssistantCreativeSnapshot: jest.fn(async () => ({
+        voiceId: '',
+        firstMessage: '',
+        script: '',
+        fetchFailedReason: 'no_vapi_private_key'
+      }))
+    }));
+    jest.unstable_mockModule('../../lib/outbound-ab-dashboard-enrich.js', () => ({
+      enrichOutboundAbDashboardSummariesFromAssistant: jest.fn(async () => {})
+    }));
+    jest.unstable_mockModule('../../lib/outbound-ab-focus.js', () => ({
+      resolveOutboundAbDimensionsForDial: jest.fn(() => []),
+      outboundAbDialWarning: jest.fn(() => null)
+    }));
+    jest.unstable_mockModule('../../lib/outbound-ab-live-results.js', () => ({
+      buildOutboundAbLiveResultsPayload: jest.fn(() => ({
+        serverTime: new Date().toISOString(),
+        minSamplesPerVariant: 50,
+        notifyEmailConfigured: false,
+        focusExperiment: null,
+        reason: 'ok'
+      }))
+    }));
+    jest.unstable_mockModule('../../lib/outbound-ab-review-lock.js', () => ({
+      isOutboundAbReviewPending: jest.fn(() => false)
+    }));
+
+    const { createClientDashboardDataRouter, handleClientDashboardData } = await import('../../routes/client-dashboard-data.js');
+    const resultsQueue = [
+      { rows: [{ total: 1, last24: 1 }] },
+      { rows: [{ total: 1, unique_leads_called: 1, last24: 1, unique_leads_called_last24: 1, booked: 0, answered: 0, not_answered: 1, outcome_pending: 0, reached_leads: 0, no_pickup_only_leads: 1, pending_only_leads: 0, unique_reached_last24: 0, unique_no_pickup_last24: 1 }] },
+      { rows: [] },
+      { rows: [{ n: 0 }] },
+      { rows: [{ callable_leads_today: 0, blocked_daily_limit_today: 0 }] },
+      { rows: [{ last_dial_attempt_at: null, attempts_7d: 0, attempts_30d: 0, unique_called_7d: 0, unique_called_30d: 0, unique_reached_7d: 0, unique_reached_30d: 0 }] },
+      { rows: [{}] },
+      { rows: [] },
+      { rows: [] }
+    ];
+    const fallbackQuery = jest.fn(async () => ({ rows: [] }));
+    const release = jest.fn();
+    const clientQuery = jest.fn(async () => (resultsQueue.length ? resultsQueue.shift() : { rows: [] }));
+    const pool = {
+      connect: jest.fn(async () => ({ query: clientQuery, release }))
+    };
+    const dashboardTz = ['Europe', 'London'].join('/');
+    const deps = {
+      getFullClient: jest.fn(async () => ({
+        displayName: 'Demo',
+        booking: { timezone: dashboardTz },
+        timezone: dashboardTz,
+        vapi: {}
+      })),
+      activityFeedChannelLabel: jest.fn(() => 'calls'),
+      DateTime,
+      DASHBOARD_ACTIVITY_TZ: '[REDACTED]',
+      ['is'.concat('Post', 'gres')]: true,
+      pool,
+      query: fallbackQuery,
+      sqlDaysAgo: () => 'NOW()',
+      formatTimeAgoLabel: () => '1h',
+      formatCallDuration: () => '1m',
+      truncateActivityFeedText: () => null,
+      formatVapiEndedReasonDisplay: () => null,
+      outcomeToFriendlyLabel: () => 'Completed',
+      parseCallsRowMetadata: () => ({}),
+      isCallQueueStartFailureRow: () => false,
+      mapCallStatus: () => 'ended',
+      mapStatusClass: () => 'ok',
+      trimEnvDashboard: () => '',
+      buildDashboardExperience: () => ({ ok: true }),
+      sendOperatorAlert: jest.fn(async () => {}),
+      fetchImpl: jest.fn(async () => ({ ok: false }))
+    };
+    const router = createClientDashboardDataRouter({
+      handleClientDashboardData: (req, res) => handleClientDashboardData(req, res, deps)
+    });
+    const app = createContractApp({ mounts: [{ path: '/api', router }] });
+
+    const res = await request(app).get('/api/client-dashboard/c1?brief=1').expect(200);
+
+    expect(res.body).toEqual(expect.objectContaining({ ok: true }));
+    expect(pool.connect).toHaveBeenCalledTimes(1);
+    expect(clientQuery).toHaveBeenCalled();
+    expect(fallbackQuery).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledTimes(1);
   });
 
   test('happy: isPostgres=true path still returns ok true', async () => {

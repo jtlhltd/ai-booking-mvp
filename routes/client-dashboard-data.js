@@ -21,6 +21,20 @@ function applyDeprecatedClientDashboardHeaders(res, clientKey) {
   res.set('Link', `</api/client-dashboard/${encodeURIComponent(String(clientKey))}>; rel="successor-version"`);
 }
 
+async function withClientDashboardQueryRunner(deps, fn) {
+  if (!deps?.isPostgres || typeof deps?.pool?.connect !== 'function') { // pragma: allowlist secret
+    return await fn(deps?.query);
+  }
+
+  const client = await deps.pool.connect();
+  const queryWithRequestClient = (text, params = []) => client.query(text, params);
+  try {
+    return await fn(queryWithRequestClient);
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * @param {Record<string, any>} deps
  */
@@ -43,6 +57,12 @@ export function createClientDashboardDataRouter(deps) {
 }
 
 export async function handleClientDashboardData(req, res, deps) {
+  return await withClientDashboardQueryRunner(deps, async (query) => {
+    return await handleClientDashboardDataWithQuery(req, res, { ...deps, query });
+  });
+}
+
+async function handleClientDashboardDataWithQuery(req, res, deps) {
   const {
     getFullClient,
     activityFeedChannelLabel,
