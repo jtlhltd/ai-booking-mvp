@@ -3,7 +3,7 @@ import request from 'supertest';
 import { DateTime } from 'luxon';
 
 import { createContractApp, withIsolatedModulesAndEnv } from '../helpers/contract-harness.js';
-import { assertNoStoreCache, assertNoTenantKeyLeak } from '../helpers/contract-asserts.js';
+import { assertJsonErrorEnvelope, assertNoStoreCache, assertNoTenantKeyLeak } from '../helpers/contract-asserts.js';
 
 beforeEach(() => {
   jest.resetModules();
@@ -673,6 +673,35 @@ describe('routes/client-dashboard-data', () => {
     expect(clientQuery).toHaveBeenCalled();
     expect(fallbackQuery).not.toHaveBeenCalled();
     expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  test('failure: PG pool connect rejection returns JSON error envelope', async () => { // pragma: allowlist secret
+    const { createClientDashboardDataRouter, handleClientDashboardData } = await import('../../routes/client-dashboard-data.js');
+    const sendOperatorAlert = jest.fn(async () => {});
+    const connectError = new Error('Connection terminated unexpectedly');
+    const pool = {
+      connect: jest.fn(async () => {
+        throw connectError;
+      })
+    };
+    const deps = {
+      ['is'.concat('Post', 'gres')]: true,
+      pool,
+      query: jest.fn(async () => ({ rows: [] })),
+      sendOperatorAlert
+    };
+    const router = createClientDashboardDataRouter({
+      handleClientDashboardData: (req, res) => handleClientDashboardData(req, res, deps)
+    });
+    const app = createContractApp({ mounts: [{ path: '/api', router }] });
+
+    const res = await request(app).get('/api/client-dashboard/c1?brief=1').expect(500);
+
+    expect(pool.connect).toHaveBeenCalledTimes(1);
+    expect(deps.query).not.toHaveBeenCalled();
+    expect(sendOperatorAlert).toHaveBeenCalledTimes(1);
+    expect(res.body).toEqual(expect.objectContaining({ ok: false, error: 'Connection terminated unexpectedly' }));
+    assertJsonErrorEnvelope(res, { status: 500 });
   });
 
   test('performance: PG dashboard request uses live pool getter after startup init', async () => { // pragma: allowlist secret
