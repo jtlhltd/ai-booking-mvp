@@ -61,9 +61,31 @@ export function createClientDashboardDataRouter(deps) {
 }
 
 export async function handleClientDashboardData(req, res, deps) {
-  return await withClientDashboardQueryRunner(deps, async (query) => {
-    return await handleClientDashboardDataWithQuery(req, res, { ...deps, query });
-  });
+  try {
+    return await withClientDashboardQueryRunner(deps, async (query) => {
+      return await handleClientDashboardDataWithQuery(req, res, { ...deps, query });
+    });
+  } catch (error) {
+    return await respondClientDashboardError(req, res, deps, error);
+  }
+}
+
+async function respondClientDashboardError(req, res, deps, error) {
+  const { sendOperatorAlert } = deps || {};
+  const clientKey = req?.params?.clientKey;
+  console.error('[CLIENT DASHBOARD ERROR]', error);
+  await sendOperatorAlert?.({
+    subject: `Dashboard sync failed for ${String(clientKey)}`,
+    html: `<p><code>GET /api/client-dashboard/${String(clientKey)}</code> failed.</p><pre>${JSON.stringify(
+      { message: error?.message, stack: error?.stack?.split('\n').slice(0, 10).join('\n') },
+      null,
+      2
+    )}</pre>`,
+    dedupeKey: `client-dash-fail:${String(clientKey)}`,
+    throttleMinutes: 90
+  }).catch(() => {});
+  if (res.headersSent) return undefined;
+  return res.status(500).json({ ok: false, error: error?.message });
 }
 
 async function handleClientDashboardDataWithQuery(req, res, deps) {
@@ -86,7 +108,6 @@ async function handleClientDashboardDataWithQuery(req, res, deps) {
     mapStatusClass,
     trimEnvDashboard,
     buildDashboardExperience,
-    sendOperatorAlert,
     fetchImpl
   } = deps || {};
 
@@ -2204,18 +2225,7 @@ async function handleClientDashboardDataWithQuery(req, res, deps) {
     }
     return respondClientDashboard(res, { etag, body: payload, cacheHeader: 'miss' });
   } catch (error) {
-    console.error('[CLIENT DASHBOARD ERROR]', error);
-    await sendOperatorAlert?.({
-      subject: `Dashboard sync failed for ${String(clientKey)}`,
-      html: `<p><code>GET /api/client-dashboard/${String(clientKey)}</code> failed.</p><pre>${JSON.stringify(
-        { message: error?.message, stack: error?.stack?.split('\n').slice(0, 10).join('\n') },
-        null,
-        2
-      )}</pre>`,
-      dedupeKey: `client-dash-fail:${String(clientKey)}`,
-      throttleMinutes: 90
-    }).catch(() => {});
-    return res.status(500).json({ ok: false, error: error?.message });
+    return await respondClientDashboardError(req, res, deps, error);
   }
 }
 
